@@ -1,0 +1,48 @@
+# Flutter / Dart
+.dart_tool/
+.packages
+build/
+.flutter-plugins
+.flutter-plugins-dependencies
+*.iml
+.idea/
+.vscode/
+coverage/
+
+# Android / Gradle yerel dosyaları
+android/.gradle/
+android/.kotlin/
+android/local.properties
+android/key.properties
+android/app/debug/
+android/app/profile/
+android/app/release/
+
+# İmza anahtarları — repoya ASLA girmez
+*.jks
+*.keystore
+anahtarlar/
+
+# Derleme çıktıları
+*.apk
+*.aab
+*.ipa
+
+# iOS
+ios/Pods/
+ios/.symlinks/
+ios/Flutter/Flutter.framework
+ios/Flutter/Flutter.podspec
+ios/Flutter/ephemeral/
+
+# Firebase
+# google-services.json bir sır değildir (istemci yapılandırması) ve uygulamanın
+# derlenmesi için gereklidir — bu yüzden bilinçli olarak repoya dahil edilir.
+# Yalnızca kendi API anahtar kısıtlamalarınızı Firebase/Google Cloud
+# konsolundan yönetin.
+.firebase/
+*-debug.log
+
+# Test golden çıktıları (hatalı karşılaştırma görselleri)
+test_preview/failures/
+test/failures/
