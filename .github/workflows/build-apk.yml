@@ -70,18 +70,6 @@ jobs:
       # KEYSTORE_B64 (base64'lenmis .p12), KEYSTORE_PASS, KEY_ALIAS, KEY_PASS
       # tanimliysa upload anahtari acilir ve release APK onunla imzalanir.
       # Tanimli degilse build.gradle.kts debug anahtarina duser.
-      # === GEÇİCİ: imzalama yolunu doğrulamak için test anahtarı üret ==========
-      - name: TEST imza anahtarı (geçici doğrulama)
-        run: |
-          keytool -genkeypair -v -keystore android/app/upload-keystore.p12 \
-            -storetype PKCS12 -alias upload -keyalg RSA -keysize 2048 -validity 30 \
-            -storepass testpass -keypass testpass \
-            -dname "CN=Rebelz Test, O=Rebelz Media, C=TR"
-          printf 'storeFile=upload-keystore.p12\nstorePassword=testpass\nkeyAlias=upload\nkeyPassword=testpass\n' \
-            > android/key.properties
-          echo "TEST_SIGNING=1" >> $GITHUB_ENV
-      # =======================================================================
-
       - name: Release imza anahtarını aç (secret varsa)
         env:
           KEYSTORE_B64: ${{ secrets.KEYSTORE_B64 }}
@@ -156,22 +144,13 @@ jobs:
           # İmza bilgisini annotation olarak da yayınla (log erişimi olmadan görünür).
           SIGNER_INFO=$(grep -E "certificate (DN|SHA-1) digest" apk-certs.txt \
             | tr '\n' ' ' | sed 's/  */ /g')
-          echo "::notice title=APK imzası (app-release.apk)::${SIGNER_INFO}TEST_SIGNING=${TEST_SIGNING:-0}"
+          echo "::notice title=APK imzası (app-release.apk)::${SIGNER_INFO}"
           echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
           grep -E "certificate (DN|SHA-1|SHA-256) digest" apk-certs.txt \
             >> $GITHUB_STEP_SUMMARY || true
           echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
           # Firebase'e kayitli iki parmak izi: release (upload) ve debug.
-          if [ "$TEST_SIGNING" = "1" ]; then
-            # GEÇİCİ: key.properties yolunun gerçekten kullanıldığını kanıtla
-            if grep -q "CN=Rebelz Test" apk-certs.txt; then
-              echo "> ✅ TEST: key.properties üzerinden imzalama ÇALIŞIYOR (CN=Rebelz Test)" \
-                >> $GITHUB_STEP_SUMMARY
-            else
-              echo "::error::TEST: APK key.properties'teki anahtarla imzalanmadı"
-              exit 1
-            fi
-          elif grep -qi "92:A0:55:FE:C3:85:15:49:CC:45:8D:60:F1:E9:C4:B1:F4:D7:CC:3D" apk-certs.txt; then
+          if grep -qi "92:A0:55:FE:C3:85:15:49:CC:45:8D:60:F1:E9:C4:B1:F4:D7:CC:3D" apk-certs.txt; then
             echo "> ✅ **Upload (release) anahtarı** ile imzalı — Firebase'de kayıtlı SHA-1." \
               >> $GITHUB_STEP_SUMMARY
             echo "> Play Store'a yüklenebilir imza budur." >> $GITHUB_STEP_SUMMARY
