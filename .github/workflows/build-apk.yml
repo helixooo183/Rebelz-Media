@@ -14,10 +14,14 @@ on:
       - 'pubspec.yaml'
       - '.github/workflows/build-apk.yml'
 
+concurrency:
+  group: apk-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   build-apk:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 60
 
     steps:
       - uses: actions/checkout@v4
@@ -35,6 +39,24 @@ jobs:
           channel: stable
           cache: true
 
+      # Gradle bağımlılıkları ve wrapper dağıtımı ikinci koşuda yeniden
+      # indirilmesin (ilk koşuda birkaç dakika kazandırır).
+      - name: Gradle önbelleği
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: gradle-${{ runner.os }}-${{ hashFiles('android/gradle/wrapper/gradle-wrapper.properties', 'android/**/*.gradle.kts', 'pubspec.lock') }}
+          restore-keys: |
+            gradle-${{ runner.os }}-
+
+      - name: Ortam bilgisi
+        run: |
+          free -m
+          nproc
+          java -version
+
       - name: Bağımlılıklar
         run: flutter pub get
 
@@ -44,10 +66,10 @@ jobs:
           flutter test
 
       - name: Release APK
-        run: flutter build apk --release
+        run: flutter build apk --release --no-pub
 
       - name: Debug APK (emülatör/eski cihazlar için)
-        run: flutter build apk --debug
+        run: flutter build apk --debug --no-pub
 
       - name: Artifact yükle
         uses: actions/upload-artifact@v4
