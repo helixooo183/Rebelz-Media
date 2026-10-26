@@ -153,6 +153,10 @@ jobs:
           APKSIGNER="$ANDROID_HOME/build-tools/$BUILD_TOOLS/apksigner"
           "$APKSIGNER" verify --print-certs \
             build/app/outputs/flutter-apk/app-release.apk | tee apk-certs.txt
+          # İmza bilgisini annotation olarak da yayınla (log erişimi olmadan görünür).
+          SIGNER_INFO=$(grep -E "certificate (DN|SHA-1) digest" apk-certs.txt \
+            | tr '\n' ' ' | sed 's/  */ /g')
+          echo "::notice title=APK imzası (app-release.apk)::${SIGNER_INFO}TEST_SIGNING=${TEST_SIGNING:-0}"
           echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
           grep -E "certificate (DN|SHA-1|SHA-256) digest" apk-certs.txt \
             >> $GITHUB_STEP_SUMMARY || true
