@@ -21,7 +21,11 @@ android/app/release/
 # İmza anahtarları — repoya ASLA girmez
 *.jks
 *.keystore
+*.p12
 anahtarlar/
+# CI'da secret'tan açılan geçici anahtar ve yerel imza ayarları
+android/app/upload-keystore.p12
+apk-certs.txt
 
 # Derleme çıktıları
 *.apk

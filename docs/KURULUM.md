@@ -55,9 +55,31 @@ derleyicisi in-process (düşük bellekli ortamlar için). Varsayılan heap CI'a
 uygun `-Xmx2048m`; ≤2 GB RAM'li bir makinede derlerken dosyanın başındaki
 `-Xmx640m` + `org.gradle.workers.max=1` ayarına geçin, aksi hâlde OOM killer
 `java`'yı öldürebilir (exit 137). `android/app/build.gradle.kts` içinde
-release R8 küçültme kapalı (APK biraz büyür, işlev aynı) ve imza debug
-keystore ile yapılıyor — Play Store'a çıkmadan önce kendi release
-keystore'unuzu tanımlayın.
+release R8 küçültme kapalı (APK biraz büyür, işlev aynı).
+
+### 2.1 Release imzası (bağlandı)
+
+`android/app/build.gradle.kts` release imzasını şu sırayla arar:
+
+1. `android/key.properties` (yerel makine, `.gitignore`'da) —
+   `storeFile=upload-keystore.p12`, `storePassword`, `keyAlias=upload`, `keyPassword`
+2. Ortam değişkenleri (CI) — `KEYSTORE_PATH`, `KEYSTORE_PASS`, `KEY_ALIAS`, `KEY_PASS`
+
+Bulunursa upload anahtarıyla, bulunmazsa debug anahtarıyla imzalanır (derleme
+kırılmaz). Yerelde upload anahtarıyla derlemek için:
+
+```bash
+cp anahtarlar/upload-keystore.p12 android/app/upload-keystore.p12
+printf 'storeFile=upload-keystore.p12\nstorePassword=%s\nkeyAlias=upload\nkeyPassword=%s\n' \
+  "$PAROLA" "$PAROLA" > android/key.properties
+flutter build apk --release
+```
+
+GitHub Actions'ta imzalamak için depo → *Settings → Secrets and variables →
+Actions*: `KEYSTORE_B64` (`base64 -w0 anahtarlar/upload-keystore.p12`),
+`KEYSTORE_PASS`, `KEY_ALIAS` (`upload`), `KEY_PASS`. Workflow anahtarı
+`android/app/upload-keystore.p12` olarak açar, `keytool` ile doğrular ve
+koşu özetinde `apksigner` çıktısını gösterir.
 
 ## 3. Google ile giriş / SHA-1
 
@@ -73,10 +95,9 @@ görünür):
 Doğrulama: `python3 tool/firebase_from_services_json.py --check`
 
 Release anahtarı `anahtarlar/upload-keystore.p12` (PKCS#12, alias `upload`,
-git dışı; parola `anahtarlar/OKUBENI.txt`). APK henüz bu anahtarla imzalanmıyor —
-`android/app/build.gradle.kts` release derlemesini debug keystore ile imzalıyor;
-anahtarı bağlamak için `OKUBENI.txt` içindeki "CI'DA BU ANAHTARLA IMZALAMA"
-bölümüne bakın.
+git dışı; parola `anahtarlar/OKUBENI.txt`) ve `build.gradle.kts`'e **bağlı**
+(imza sırası: `android/key.properties` → `KEYSTORE_*` ortam değişkenleri →
+debug keystore). Adımlar: [2.1 Release imzası](#21-release-i̇mzası-bağlandı).
 
 Kendi makinenizde ya da CI'da derlerseniz **farklı bir keystore** kullanılır ve
 Google girişi `ApiException: 10` verir. Yapılacak:
@@ -118,6 +139,7 @@ npx -y firebase-tools@latest deploy --only firestore:rules --project rebelz-medi
 | `flutter build web --release` | ✅ başarılı |
 | Zip'ten çıkarılıp yeniden `pub get` + `analyze` + `test` | ✅ geçti |
 | `flutter build apk` | ❌ 2 GB RAM'de OOM (paket ortamı) |
+| Release imzası (`key.properties` / `KEYSTORE_*`) | ✅ bağlı, secret yoksa debug'a düşer |
 | Kotlin Gradle plugin | ✅ 2.1.0 → 2.2.20 (Firebase plugin'leri için gerekliydi) |
 
 ## 6. Bilinen sınırlar
