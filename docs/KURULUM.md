@@ -14,7 +14,7 @@ App ID: `1:824723400047:android:4f0919a943290bf905749a`
 └── docs/
     ├── 01_splash.png … 07_setup.png  7 ayrı ekran görüntüsü
     ├── screens.png                   kolaj (README'de kullanılır)
-    ├── imza-parmak-izleri.txt        debug keystore SHA-1 / SHA-256
+    ├── imza-parmak-izleri.txt        kayıtlı debug + release SHA-1/SHA-256
     └── KURULUM.md                    bu dosya
 ```
 
@@ -61,11 +61,22 @@ keystore'unuzu tanımlayın.
 
 ## 3. Google ile giriş / SHA-1
 
-Firebase konsolunda kayıtlı parmak izi:
+Firebase konsolunda kayıtlı **iki** parmak izi var
+(`android/app/google-services.json` içinde iki Android OAuth istemcisi olarak
+görünür):
 
-```
-CA:D5:F0:42:CD:90:19:D7:61:E9:90:66:40:8A:D6:21:1C:A9:4C:4A
-```
+| Anahtar | SHA-1 | İstemci |
+|---|---|---|
+| debug (paket ortamı) | `CA:D5:F0:42:CD:90:19:D7:61:E9:90:66:40:8A:D6:21:1C:A9:4C:4A` | `…5i07fq5h70qo3ec8e8aa71klairquk8m` |
+| release / upload | `92:A0:55:FE:C3:85:15:49:CC:45:8D:60:F1:E9:C4:B1:F4:D7:CC:3D` | `…gl8m2ep7vlbjninu1udlehpbjssmct8j` |
+
+Doğrulama: `python3 tool/firebase_from_services_json.py --check`
+
+Release anahtarı `anahtarlar/upload-keystore.p12` (PKCS#12, alias `upload`,
+git dışı; parola `anahtarlar/OKUBENI.txt`). APK henüz bu anahtarla imzalanmıyor —
+`android/app/build.gradle.kts` release derlemesini debug keystore ile imzalıyor;
+anahtarı bağlamak için `OKUBENI.txt` içindeki "CI'DA BU ANAHTARLA IMZALAMA"
+bölümüne bakın.
 
 Kendi makinenizde ya da CI'da derlerseniz **farklı bir keystore** kullanılır ve
 Google girişi `ApiException: 10` verir. Yapılacak:
@@ -86,7 +97,7 @@ CI kullanıyorsanız SHA-1 workflow özetinde de yazdırılır.
 
 ## 4. Firebase tarafı
 
-- Android uygulaması `com.rebelz.media` olarak kayıtlı, SHA-1 eklendi
+- Android uygulaması `com.rebelz.media` olarak kayıtlı; debug ve release SHA-1'i eklendi
 - Google ve Email/Password giriş yöntemleri etkin
 - `google-services.json` → `android/app/google-services.json`
 - `lib/firebase_options.dart` gerçek değerlerle dolu
