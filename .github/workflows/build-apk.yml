@@ -7,7 +7,8 @@ name: APK derle
 on:
   workflow_dispatch:
   push:
-    branches: [main, master]
+    # 'arena/**' = Arena ajan dallari; PR birlesmeden once derlemeyi dogrulamak icin.
+    branches: [main, master, 'arena/**']
     paths:
       - 'lib/**'
       - 'android/**'
@@ -99,8 +100,24 @@ jobs:
             exit 1
           fi
 
+      # Not: log dosyalari herkese acik olmayabilir; Gradle hatasi hem annotation
+      # hem de kosu ozetine yazilir ki sebep tek bakista gorunsun.
       - name: Release APK
-        run: flutter build apk --release --no-pub
+        run: |
+          set -o pipefail
+          if flutter build apk --release --no-pub 2>&1 | tee /tmp/release-apk.log; then
+            exit 0
+          fi
+          echo "### ❌ Release APK derlenemedi" >> $GITHUB_STEP_SUMMARY
+          sed -n '/What went wrong/,/^\* Try:/p' /tmp/release-apk.log | head -12 \
+            | while IFS= read -r line; do
+                [ -n "$line" ] && echo "::error title=Gradle::${line}"
+              done
+          echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+          sed -n '/What went wrong/,/^\* Try:/p' /tmp/release-apk.log | head -12 \
+            >> $GITHUB_STEP_SUMMARY
+          echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+          exit 1
 
       - name: Debug APK (emülatör/eski cihazlar için)
         run: flutter build apk --debug --no-pub
