@@ -104,7 +104,20 @@ python3 tool/firebase_from_services_json.py --check   # Web client ID geldi mi?
 python3 tool/firebase_from_services_json.py           # firebase_options + Web client ID yaz
 ```
 
-### ⚠️ Kendi makinende ilk çalıştırmada: SHA-1
+### 🔐 Güvenlik notu (depo public)
+
+`google-services.json` ve `lib/firebase_options.dart` içindeki değerler
+**istemci yapılandırmasıdır** (Firebase API anahtarı sır değildir; güvenlik
+Firestore kuralları ve Authentication ile sağlanır) — bu yüzden repoya dahil.
+Yine de public bir repoda önerilenler:
+
+- Google Cloud Console → **APIs & Services → Credentials** → Android/iOS
+  anahtarlarını uygulama kısıtlamasıyla (paket adı + SHA-1) sınırlayın,
+  tarayıcı anahtarını yalnızca izinli domainlerle.
+- `firestore.rules` dosyasını mutlaka yayınlayın (test modu kuralları açık bırakmayın).
+- **Özel anahtarlar repoda yok:** `*.jks`, `*.keystore` ve `android/key.properties`
+  `.gitignore` içinde.
+
 
 Kayıtlı SHA-1, paket hazırlanırken üretilen debug keystore'a ait. **Senin
 bilgisayarındaki Flutter kendi debug keystore'unu oluşturur ve parmak izi
