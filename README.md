@@ -14,7 +14,8 @@ Koyu temalı bir sohbet uygulaması. Backend: **Firebase Authentication
 | **Firebase projesi** | `rebelz-media` |
 | **Android paketi** | `com.rebelz.media` |
 | **App ID** | `1:824723400047:android:4f0919a943290bf905749a` |
-| **Debug SHA-1** | `CA:D5:F0:42:CD:90:19:D7:61:E9:90:66:40:8A:D6:21:1C:A9:4C:4A` |
+| **Kayıtlı SHA-1 (debug)** | `CA:D5:F0:42:CD:90:19:D7:61:E9:90:66:40:8A:D6:21:1C:A9:4C:4A` |
+| **Kayıtlı SHA-1 (release/upload)** | `92:A0:55:FE:C3:85:15:49:CC:45:8D:60:F1:E9:C4:B1:F4:D7:CC:3D` |
 | **Flutter** | 3.35+ · **JDK** 17 · **Android SDK** 36 |
 
 ## Hızlı başlangıç
@@ -84,7 +85,9 @@ flutter build apk --release   # build/app/outputs/flutter-apk/app-release.apk
 
 ## Firebase tarafı
 
-- Android uygulaması `com.rebelz.media` olarak kayıtlı, debug SHA-1 eklendi
+- Android uygulaması `com.rebelz.media` olarak kayıtlı; **iki** SHA-1 eklendi:
+  debug (`CA:D5:F0:42:…:4C:4A`) ve release/upload (`92:A0:55:FE:…:CC:3D`)
+- `google-services.json` bu iki Android OAuth istemcisini + Web istemcisini içeriyor
 - Google ve Email/Password giriş yöntemleri etkin
 - `google-services.json` → `android/app/google-services.json` (repoda)
 - `lib/firebase_options.dart` gerçek değerlerle dolu
@@ -119,11 +122,11 @@ Yine de public bir repoda önerilenler:
   `.gitignore` içinde.
 
 
-Kayıtlı SHA-1, paket hazırlanırken üretilen debug keystore'a ait. **Senin
-bilgisayarındaki Flutter kendi debug keystore'unu oluşturur ve parmak izi
-farklıdır.** Google girişi `ApiException: 10` verirse kendi SHA-1'ini
-Firebase'e ek fingerprint olarak ekle (mevcut silinmesin, ikisi birlikte
-durabilir):
+Firebase'de **iki** parmak izi kayıtlı: debug (`CA:D5:F0:42:…`) ve
+release/upload (`92:A0:55:FE:…`). **Senin bilgisayarındaki Flutter kendi debug
+keystore'unu oluşturur ve parmak izi farklıdır**; GitHub Actions her koşuda yeni
+bir keystore üretir. Google girişi `ApiException: 10` verirse o ortamın SHA-1'ini
+Firebase'e ek fingerprint olarak ekle (mevcutlar silinmesin, yan yana durabilir):
 
 ```bash
 keytool -list -v -keystore ~/.android/debug.keystore -alias androiddebugkey \
@@ -133,9 +136,11 @@ keytool -list -v -keystore ~/.android/debug.keystore -alias androiddebugkey \
 Windows: `%USERPROFILE%\.android\debug.keystore`. Keystore yoksa bir kez
 `flutter run` çalıştırınca oluşur.
 
-> **Not:** Paketle gelen `debug.keystore` **repoya eklenmedi** (özel anahtar
-> dosyasıdır, public repoya girmez). Yalnızca parmak izleri
-> [docs/imza-parmak-izleri.txt](docs/imza-parmak-izleri.txt) içinde.
+> **Not:** Anahtar dosyaları (`*.jks`, `*.keystore`, `*.p12`) **repoya
+> eklenmez** — public repoda özel anahtar tutulmaz. Release anahtarı yerelde
+> `anahtarlar/upload-keystore.p12` (git dışı) durur; parolası ve kullanım
+> adımları `anahtarlar/OKUBENI.txt`. Tüm parmak izleri ve doğrulama komutları:
+> [docs/imza-parmak-izleri.txt](docs/imza-parmak-izleri.txt).
 
 ## Google Sign-In akışı (kod)
 
@@ -202,7 +207,8 @@ flutter test test_preview/preview_test.dart --update-goldens   # docs/screens.pn
 
 ## Sırada
 
-- [ ] Release keystore SHA-1'ini Firebase'e ekleme + Play imzalama
+- [x] Release keystore SHA-1'ini Firebase'e ekleme (`92:A0:55:FE:…:CC:3D`)
+- [ ] Release imzalamayı `build.gradle.kts`'e bağlama (şu an debug keystore ile imzalıyor) + Play imzalama
 - [ ] iOS uygulamasını kaydetme (`GoogleService-Info.plist`, `REVERSED_CLIENT_ID`)
 - [ ] `users` koleksiyonundan fotoğraf gösterimi (`photoUrl` zaten yazılıyor)
 - [ ] Mesaj sayfalama (şu an son 100 mesaj), okundu bilgisi, FCM bildirimleri

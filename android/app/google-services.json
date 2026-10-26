@@ -22,6 +22,14 @@
           }
         },
         {
+          "client_id": "824723400047-gl8m2ep7vlbjninu1udlehpbjssmct8j.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.rebelz.media",
+            "certificate_hash": "92a055fec3851549cc458d60f1e9c4b1f4d7cc3d"
+          }
+        },
+        {
           "client_id": "824723400047-4dls5k2urdc2lvo43ir443d3iasuj6u0.apps.googleusercontent.com",
           "client_type": 3
         }
