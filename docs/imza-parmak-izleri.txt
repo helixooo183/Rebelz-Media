@@ -1,0 +1,8 @@
+Bu keystore, derleme denemelerinde oluşturulan Android debug imzasıdır.
+Store parolası: android   Key parolası: android   Alias: androiddebugkey
+
+	 SHA1: 4D:62:C7:BF:99:91:41:2C:6D:C6:F4:6A:6C:12:6F:D5:D4:74:5A:67
+	 SHA256: 49:DD:A9:1A:F5:81:77:DE:81:0F:85:FE:BB:40:DF:0A:1F:A9:EF:0A:22:F5:B4:19:14:31:BE:6E:CB:C1:1A:FE
+
+Firebase konsolunda KAYITLI parmak izi (bu keystore'a ait DEĞİL):
+  SHA1: CA:D5:F0:42:CD:90:19:D7:61:E9:90:66:40:8A:D6:21:1C:A9:4C:4A

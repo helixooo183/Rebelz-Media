@@ -1,0 +1,47 @@
+{
+  "project_info": {
+    "project_number": "824723400047",
+    "project_id": "rebelz-media",
+    "storage_bucket": "rebelz-media.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:824723400047:android:4f0919a943290bf905749a",
+        "android_client_info": {
+          "package_name": "com.rebelz.media"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "824723400047-5i07fq5h70qo3ec8e8aa71klairquk8m.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.rebelz.media",
+            "certificate_hash": "cad5f042cd9019d761e99066408ad6211ca94c4a"
+          }
+        },
+        {
+          "client_id": "824723400047-4dls5k2urdc2lvo43ir443d3iasuj6u0.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAGkOLzq0nnWVYbZEBWt9nMW5OOWreveKk"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "824723400047-4dls5k2urdc2lvo43ir443d3iasuj6u0.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
