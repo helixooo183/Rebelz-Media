@@ -46,12 +46,13 @@ artifact üretilmez. SHA-1/SHA-256 parmak izi workflow özetine yazılır.
 flutter build apk --release   # build/app/outputs/flutter-apk/app-release.apk
 ```
 
-> Bu depo 2 GB RAM'li bir ortamda hazırlandı ve `flutter build apk` orada
-> OOM (exit 137) ile düştü. Bu yüzden `android/gradle.properties` düşük bellek
-> için ayarlı (`-Xmx640m`, daemon kapalı, Kotlin in-process), release'te R8
-> küçültme kapalı ve imza debug keystore ile yapılıyor. Kendi makinenizde bu
-> satırları silebilirsiniz; Play Store'a çıkmadan önce kendi release
-> keystore'unuzu tanımlayın.
+> Bu depo 2 GB RAM'li bir ortamda hazırlandı; `flutter build apk` orada OOM
+> (exit 137) ile düştüğü için `android/gradle.properties` içinde daemon kapalı
+> ve Kotlin derleyicisi in-process. Varsayılan heap CI için `-Xmx2048m`;
+> ≤2 GB RAM'li bir makinede derlerken dosyanın başındaki `-Xmx640m` +
+> `org.gradle.workers.max=1` kombinasyonuna geçin. Release'te R8 küçültme kapalı
+> ve imza debug keystore ile yapılıyor — Play Store'a çıkmadan önce kendi
+> release keystore'unuzu tanımlayın.
 
 ## Depo yapısı
 

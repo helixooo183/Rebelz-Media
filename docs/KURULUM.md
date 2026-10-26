@@ -50,9 +50,11 @@ flutter build apk --release
 Telefona kurmak için: dosyayı cihaza kopyala → dokun → "bilinmeyen
 kaynaklara izin ver" → kur.
 
-Not: `android/gradle.properties` düşük bellekli ortam için ayarlandı
-(`-Xmx640m`, daemon kapalı, Kotlin in-process). Kendi makinenizde bu satırları
-silip varsayılana dönebilirsiniz. `android/app/build.gradle.kts` içinde
+Not: `android/gradle.properties` içinde Gradle daemon kapalı ve Kotlin
+derleyicisi in-process (düşük bellekli ortamlar için). Varsayılan heap CI'a
+uygun `-Xmx2048m`; ≤2 GB RAM'li bir makinede derlerken dosyanın başındaki
+`-Xmx640m` + `org.gradle.workers.max=1` ayarına geçin, aksi hâlde OOM killer
+`java`'yı öldürebilir (exit 137). `android/app/build.gradle.kts` içinde
 release R8 küçültme kapalı (APK biraz büyür, işlev aynı) ve imza debug
 keystore ile yapılıyor — Play Store'a çıkmadan önce kendi release
 keystore'unuzu tanımlayın.
