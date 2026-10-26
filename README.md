@@ -39,7 +39,8 @@ APK üretmek için iki yol var — ikisi de ayrıntılı olarak
 - `app-debug.apk` — emülatör/eski cihazlar
 
 Workflow `flutter analyze` + `flutter test` de çalıştırır; kırmızı olursa
-artifact üretilmez. SHA-1/SHA-256 parmak izi workflow özetine yazılır.
+artifact üretilmez. Son adım `apksigner` ile **APK'nın gerçek imzasını** doğrular
+ve SHA-1/SHA-256'yı workflow özetine yazar.
 
 **2) Kendi makinenizde**
 
@@ -51,9 +52,9 @@ flutter build apk --release   # build/app/outputs/flutter-apk/app-release.apk
 > (exit 137) ile düştüğü için `android/gradle.properties` içinde daemon kapalı
 > ve Kotlin derleyicisi in-process. Varsayılan heap CI için `-Xmx2048m`;
 > ≤2 GB RAM'li bir makinede derlerken dosyanın başındaki `-Xmx640m` +
-> `org.gradle.workers.max=1` kombinasyonuna geçin. Release'te R8 küçültme kapalı
-> ve imza debug keystore ile yapılıyor — Play Store'a çıkmadan önce kendi
-> release keystore'unuzu tanımlayın.
+> `org.gradle.workers.max=1` kombinasyonuna geçin. Release'te R8 küçültme kapalı.
+> İmza: upload anahtarı varsa onunla, yoksa debug anahtarıyla
+> ([Release imzalama](#release-imzalama) bölümüne bakın).
 
 ## Depo yapısı
 
@@ -80,7 +81,43 @@ flutter build apk --release   # build/app/outputs/flutter-apk/app-release.apk
 ├── tool/firebase_from_services_json.py   # google-services.json → Dart yapılandırması
 ├── firestore.rules
 ├── docs/                             # ekran görüntüleri, kurulum rehberi, imza izleri
+├── anahtarlar/                       # upload-keystore.p12 + parola (git dışı)
 └── .github/workflows/build-apk.yml   # APK derleme + test workflow'u
+```
+
+## Release imzalama
+
+Release APK'nın imzası `android/app/build.gradle.kts` içinde iki kaynaktan
+beslenir — ilk bulunan kullanılır:
+
+| Kaynak | Nerede | İçerik |
+|---|---|---|
+| `android/key.properties` | yerel makine (`.gitignore`'da) | `storeFile=upload-keystore.p12`, `storePassword`, `keyAlias=upload`, `keyPassword` |
+| Ortam değişkenleri | CI | `KEYSTORE_PATH`, `KEYSTORE_PASS`, `KEY_ALIAS`, `KEY_PASS` |
+
+`storeFile` yolu `android/app/` altına göredir. İkisi de yoksa derleme
+**kırılmaz**, release APK debug anahtarıyla imzalanır (CI özetinde ⚠️ işaretlenir).
+
+**CI'da upload anahtarıyla imzalamak için** — GitHub → *Settings → Secrets and
+variables → Actions*:
+
+| Secret | Değer |
+|---|---|
+| `KEYSTORE_B64` | `base64 -w0 anahtarlar/upload-keystore.p12` |
+| `KEYSTORE_PASS` | anahtar deposu parolası |
+| `KEY_ALIAS` | `upload` |
+| `KEY_PASS` | anahtar parolası (genelde aynı) |
+
+Workflow bu secret'ları `android/app/upload-keystore.p12` + `android/key.properties`
+olarak açar (ikisi de git dışı) ve `keytool` ile doğrular; parola/alias yanlışsa
+koşu **hata vererek** durur — sessizce debug imzaya düşmez. Secret tanımlı
+değilse adım atlanır, APK debug anahtarıyla imzalanır.
+
+İmzayı doğrulama:
+
+```bash
+apksigner verify --print-certs build/app/outputs/flutter-apk/app-release.apk
+# Signer #1 certificate SHA-1 digest: 92a055fec3851549cc458d60f1e9c4b1f4d7cc3d
 ```
 
 ## Firebase tarafı
@@ -208,7 +245,8 @@ flutter test test_preview/preview_test.dart --update-goldens   # docs/screens.pn
 ## Sırada
 
 - [x] Release keystore SHA-1'ini Firebase'e ekleme (`92:A0:55:FE:…:CC:3D`)
-- [ ] Release imzalamayı `build.gradle.kts`'e bağlama (şu an debug keystore ile imzalıyor) + Play imzalama
+- [x] Release imzalamayı `build.gradle.kts`'e bağlama (`key.properties` / `KEYSTORE_*`)
+- [ ] Secret'ları GitHub'a tanımlama + Play Store'a yükleme (`.aab`, Play App Signing)
 - [ ] iOS uygulamasını kaydetme (`GoogleService-Info.plist`, `REVERSED_CLIENT_ID`)
 - [ ] `users` koleksiyonundan fotoğraf gösterimi (`photoUrl` zaten yazılıyor)
 - [ ] Mesaj sayfalama (şu an son 100 mesaj), okundu bilgisi, FCM bildirimleri

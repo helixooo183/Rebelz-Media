@@ -37,7 +37,16 @@ d) GitHub Actions APK'ları — her koşuda yeni keystore üretilir
      Bu SHA-1'i Firebase'e eklemediğin sürece CI APK'sında Google girişi
      ApiException: 10 verir.
 
-3) KONTROL KOMUTLARI
+3) IMZALAMA DURUMU
+------------------
+android/app/build.gradle.kts release imzasini su sirayla arar:
+  1) android/key.properties            (storeFile / storePassword / keyAlias / keyPassword)
+  2) ortam degiskenleri                (KEYSTORE_PATH / KEYSTORE_PASS / KEY_ALIAS / KEY_PASS)
+  3) hicbiri yoksa -> debug keystore   (CI ozetinde "debug anahtari" olarak isaretlenir)
+CI'da secret adlari: KEYSTORE_B64 (base64 .p12), KEYSTORE_PASS, KEY_ALIAS, KEY_PASS.
+Parola/alias yanlissa workflow "Release imza anahtarini ac" adiminda hata verir.
+
+4) KONTROL KOMUTLARI
 --------------------
   # release keystore (PKCS12)
   keytool -list -v -keystore anahtarlar/upload-keystore.p12 -storetype PKCS12 -alias upload
@@ -48,5 +57,8 @@ d) GitHub Actions APK'ları — her koşuda yeni keystore üretilir
   # google-services.json içindekileri listele
   python3 tool/firebase_from_services_json.py --check
 
-  # imzalı APK'nın gerçek parmak izi
+  # imzalı APK'nın gerçek parmak izi (çıktı: Signer #1 certificate SHA-1 digest)
   apksigner verify --print-certs build/app/outputs/flutter-apk/app-release.apk
+
+  # base64 (GitHub secret KEYSTORE_B64 için)
+  base64 -w0 anahtarlar/upload-keystore.p12   # Windows: certutil -encodehex -f dosya cikti 4
