@@ -25,8 +25,8 @@ KOK = Path(__file__).resolve().parent.parent
 EKRANLAR = KOK / "docs" / "ekranlar"
 CIKTI = KOK / "docs" / "screens.png"
 
-GENISLIK = 300
-SUTUN = 6
+GENISLIK = 360
+SUTUN = 5
 BOSLUK = 18
 ARKA = (9, 9, 11)
 CERCEVE = (44, 44, 52)
