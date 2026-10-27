@@ -130,7 +130,9 @@ class _RegisterScreenState extends State<RegisterScreen> {
       ),
       children: [
         GoogleSignInButton(
-          onPressed: _acceptedTerms ? _googleSignIn : null,
+          // Buton her zaman açık: koşullar kabul edilmemişse uyarı gösterilir
+          // (pasif gri buton "bozuk" görünüyordu).
+          onPressed: _googleSignIn,
           label: 'Google ile kayıt ol',
           isLoading: _isGoogleLoading,
         ),
