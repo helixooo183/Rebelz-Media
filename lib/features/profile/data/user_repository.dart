@@ -2,6 +2,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
 
+import '../domain/avatar_policy.dart';
 import '../domain/legal_texts.dart';
 import '../domain/user_profile.dart';
 
@@ -199,6 +200,9 @@ class UserRepository {
         'usernameLower': normalizedUsername,
         'bio': bio.trim(),
         'photoUrl': trimmedPhoto,
+        // Kullanıcı seçimi işaretlenir; giriş sırasında Google fotoğrafı bu
+        // seçimi ezmesin (bkz. `AvatarPolicy`).
+        'photoSource': AvatarPolicy.sourceFor(trimmedPhoto),
         'avatarEmoji': avatarEmoji.trim(),
         'avatarColor': avatarColor,
         'lastSeenAt': FieldValue.serverTimestamp(),

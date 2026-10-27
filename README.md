@@ -362,6 +362,7 @@ flutter test test_preview/preview_test.dart --update-goldens   # docs/screens.pn
 - [x] **Davet derin bağlantısı** (`rebelzmedia://katil/<kod>` → uygulama açılır)
 - [x] **Şikayet inceleme paneli** (`admins/{uid}`, durum güncelleme)
 - [x] **Kanal/grup fotoğrafı** (galeriden, base64 — sahip/moderatör)
+- [x] **Avatar koruması** (girişte Google fotoğrafı/adı özel seçimi ezmez)
 - [ ] Mesaj sayfalama (şu an son 200 mesaj), FCM bildirimleri
 
 ---

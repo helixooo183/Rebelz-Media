@@ -8,6 +8,7 @@ import 'package:sohbet/features/moderation/data/moderation_repository.dart';
 import 'package:sohbet/features/profile/domain/legal_texts.dart';
 import 'package:sohbet/features/profile/domain/user_profile.dart';
 import 'package:sohbet/features/profile/presentation/terms_sheet.dart';
+import 'package:sohbet/features/profile/domain/avatar_policy.dart';
 
 void main() {
   group('Username', () {
@@ -414,6 +415,93 @@ void main() {
     test('copyWith fotoğrafı korur, boş değer kaldırır', () {
       expect(room.copyWith(name: 'Yeni ad').photoUrl, room.photoUrl);
       expect(room.copyWith(photoUrl: '').photoUrl, isEmpty);
+    });
+  });
+
+  group('Girişte avatar ve ad koruması', () {
+    test('özel fotoğraf Google fotoğrafıyla ezilmez', () {
+      expect(
+        AvatarPolicy.photoOnLogin(
+          existingPhoto: 'https://eski/google.jpg',
+          existingSource: AvatarPolicy.sourceCustom,
+          googlePhoto: 'https://yeni/google.jpg',
+        ),
+        isNull,
+      );
+    });
+
+    test('eski kayıtlarda data: URI özel fotoğraf sayılır', () {
+      expect(
+        AvatarPolicy.photoOnLogin(
+          existingPhoto: 'data:image/jpeg;base64,AAAA',
+          existingSource: '',
+          googlePhoto: 'https://yeni/google.jpg',
+        ),
+        isNull,
+      );
+    });
+
+    test('fotoğrafı bilerek kaldıran kullanıcıya Google fotoğrafı gelmez', () {
+      expect(
+        AvatarPolicy.photoOnLogin(
+          existingPhoto: '',
+          existingSource: AvatarPolicy.sourceNone,
+          googlePhoto: 'https://yeni/google.jpg',
+        ),
+        isNull,
+      );
+    });
+
+    test('ilk girişte Google fotoğrafı yazılır', () {
+      expect(
+        AvatarPolicy.photoOnLogin(
+          existingPhoto: '',
+          existingSource: '',
+          googlePhoto: 'https://yeni/google.jpg',
+        ),
+        'https://yeni/google.jpg',
+      );
+    });
+
+    test('Google fotoğrafı yoksa veya aynıysa dokunulmaz', () {
+      expect(
+        AvatarPolicy.photoOnLogin(
+          existingPhoto: '',
+          existingSource: '',
+          googlePhoto: '  ',
+        ),
+        isNull,
+      );
+      expect(
+        AvatarPolicy.photoOnLogin(
+          existingPhoto: 'https://ayni.jpg',
+          existingSource: '',
+          googlePhoto: 'https://ayni.jpg',
+        ),
+        isNull,
+      );
+    });
+
+    test('kullanıcının belirlediği ad Google adıyla ezilmez', () {
+      expect(
+        AvatarPolicy.displayNameOnLogin(
+          existingName: 'Kendi Adım',
+          googleName: 'Google Ad',
+        ),
+        isNull,
+      );
+      expect(
+        AvatarPolicy.displayNameOnLogin(existingName: '', googleName: 'Google Ad'),
+        'Google Ad',
+      );
+    });
+
+    test('kaynak işareti fotoğrafa göre belirlenir', () {
+      expect(AvatarPolicy.sourceFor(''), AvatarPolicy.sourceNone);
+      expect(
+        AvatarPolicy.sourceFor(' data:image/jpeg;base64,AA '),
+        AvatarPolicy.sourceCustom,
+      );
     });
   });
 }

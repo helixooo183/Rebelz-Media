@@ -69,11 +69,13 @@ service cloud.firestore {
              'photoUrl', 'createdAt', 'lastSeenAt',
              'username', 'usernameLower', 'bio', 'avatarEmoji', 'avatarColor',
              'usernameChanges', 'usernameWindowStart',
-             'termsVersion', 'termsAcceptedAt',
+             'termsVersion', 'termsAcceptedAt', 'photoSource',
            ])
         && isNonEmptyString(request.resource.data.displayName, 80)
         && (!('photoUrl' in request.resource.data)
-              || isPhoto(request.resource.data.photoUrl));
+              || isPhoto(request.resource.data.photoUrl))
+        && (!('photoSource' in request.resource.data)
+              || request.resource.data.photoSource in ['custom', 'none']);
 
       // Sahibi profil alanlarını günceller; e-posta/uid gibi alanlar sabit.
       allow update: if isOwner(userId)
@@ -82,13 +84,16 @@ service cloud.firestore {
                'displayName', 'displayNameLower', 'photoUrl', 'lastSeenAt',
                'username', 'usernameLower', 'bio', 'avatarEmoji',
                'avatarColor', 'usernameChanges', 'usernameWindowStart',
-               'termsVersion', 'termsAcceptedAt',
+               'termsVersion', 'termsAcceptedAt', 'photoSource',
                'emailVerified',
              ])
         && isNonEmptyString(request.resource.data.displayName, 80)
         && kotaGecerli()
         && (!('photoUrl' in request.resource.data)
               || isPhoto(request.resource.data.photoUrl))
+        // Kullanıcı seçimi işareti: Google fotoğrafı bunu ezmez.
+        && (!('photoSource' in request.resource.data)
+              || request.resource.data.photoSource in ['custom', 'none'])
         && (!('usernameLower' in request.resource.data.diff(resource.data)
                 .affectedKeys())
             || isUsername(request.resource.data.usernameLower));
