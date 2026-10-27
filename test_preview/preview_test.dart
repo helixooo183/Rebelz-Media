@@ -264,8 +264,19 @@ Widget _wrap(Widget child) => MaterialApp(
       home: child,
     );
 
+Future<void> _loadBrandAssets() async {
+  // İlk golden'da logo boş görünmesin diye marka görselleri önceden okunur.
+  final mark = await rootBundle.load('assets/brand/rebelz-mark.png');
+  final wordmark = await rootBundle.load('assets/brand/rebelz-wordmark.png');
+  expect(mark.lengthInBytes, greaterThan(0));
+  expect(wordmark.lengthInBytes, greaterThan(0));
+}
+
 void main() {
-  setUpAll(_loadFonts);
+  setUpAll(() async {
+    await _loadFonts();
+    await _loadBrandAssets();
+  });
 
   setUp(() {
     // iPhone 14 benzeri mantıksal ölçüler (390 x 844), 3x yoğunluk.
@@ -444,6 +455,7 @@ void main() {
   testWidgets('01 splash', (tester) async {
     await tester.pumpWidget(_wrap(const SplashScreen()));
     await tester.pump();
+    await tester.pump(const Duration(milliseconds: 60));
     await expectLater(
       find.byType(MaterialApp),
       matchesGoldenFile('goldens/01_splash.png'),
