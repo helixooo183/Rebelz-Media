@@ -66,6 +66,7 @@ jobs:
           free -m
           nproc
           java -version
+          flutter --version
 
       - name: Bağımlılıklar
         run: flutter pub get
