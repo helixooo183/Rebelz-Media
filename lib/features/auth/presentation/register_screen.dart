@@ -104,9 +104,9 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
     return AuthScaffold(
       title: 'Hesap oluştur',
-      subtitle: 'Saniyeler içinde katıl; kullanıcı adını seç, çevreni kur.',
-      logoHeight: 76,
-      bannerHeight: 184,
+      subtitle: 'Kullanıcı adını seç, çevreni kur.',
+      logoHeight: 64,
+      bannerHeight: 150,
       footer: Row(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
@@ -192,21 +192,11 @@ class _RegisterScreenState extends State<RegisterScreen> {
                   return null;
                 },
               ),
-              const SizedBox(height: 14),
+              const SizedBox(height: 12),
               TermsCheckbox(
                 value: _acceptedTerms,
                 enabled: !isBusy,
                 onChanged: (value) => setState(() => _acceptedTerms = value),
-              ),
-              const SizedBox(height: 10),
-              const Text(
-                'Kayıttan sonra doğrulama bağlantısı e-postana gönderilir; '
-                'gelmezse spam klasörünü kontrol et.',
-                style: TextStyle(
-                  fontSize: 12,
-                  height: 1.45,
-                  color: Color(0xFF8E8E97),
-                ),
               ),
               const SizedBox(height: 14),
               PrimaryButton(

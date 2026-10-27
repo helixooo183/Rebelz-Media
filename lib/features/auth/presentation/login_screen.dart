@@ -142,7 +142,7 @@ class _LoginScreenState extends State<LoginScreen> {
     return AuthScaffold(
       title: 'Tekrar hoş geldin',
       subtitle: 'Sohbetlerine, kanallarına ve çevrene kaldığın yerden devam et.',
-      logoHeight: 92,
+      logoHeight: 88,
       footer: _Footer(
         busy: _isLoading || _isGoogleLoading,
         onRegister: () => context.go(AppRoutes.register),
