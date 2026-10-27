@@ -406,6 +406,35 @@ class ChatRepository {
     await _rooms.doc(roomId).set(data, SetOptions(merge: true));
   }
 
+  /// Kanal/grup fotoğrafı için üst sınır (kuraldaki `isPhoto` ile aynı).
+  /// 400 000 karakter ≈ 390 KB; tipik avatar 10-25 KB.
+  static const int maxRoomPhotoLength = 400000;
+
+  /// Kanal/grup fotoğrafını değiştirir.
+  ///
+  /// [dataUri] boş verilirse fotoğraf kaldırılır. Firestore'a base64
+  /// `data:` URI'si olarak yazılır (Storage kullanılmıyor), bu yüzden boyut
+  /// sınırı burada da kontrol edilir.
+  Future<void> setRoomPhoto(String roomId, String dataUri) async {
+    _requireUid();
+    final value = dataUri.trim();
+    if (value.isEmpty) {
+      await _rooms.doc(roomId).set({
+        'photoUrl': '',
+      }, SetOptions(merge: true));
+      return;
+    }
+    if (!value.startsWith('data:image/')) {
+      throw const ChatException('Fotoğraf okunamadı, tekrar deneyin.');
+    }
+    if (value.length > maxRoomPhotoLength) {
+      throw const ChatException('Fotoğraf çok büyük (en fazla ~390 KB).');
+    }
+    await _rooms.doc(roomId).set({
+      'photoUrl': value,
+    }, SetOptions(merge: true));
+  }
+
   /// Bir izni açar/kapatır (bkz. `ChatRoom.permOnlyModsPost`).
   Future<void> setPermission(
     String roomId,

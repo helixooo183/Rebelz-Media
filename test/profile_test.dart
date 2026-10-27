@@ -387,4 +387,33 @@ void main() {
       expect(ReportStatus.label('bilinmeyen'), 'Açık');
     });
   });
+
+  group('Kanal/grup fotoğrafı ve rolleri', () {
+    const room = ChatRoom(
+      id: 'r1',
+      name: 'Rebelz Kanal',
+      createdBy: 'sahip',
+      ownerUid: 'sahip',
+      memberIds: ['sahip', 'mod', 'uye'],
+      type: RoomType.channel,
+      photoUrl: 'data:image/jpeg;base64,AAAA',
+      roles: {'mod': ChatRoom.roleModerator},
+    );
+
+    test('fotoğrafı sahip ve moderatör yönetebilir, üye yönetemez', () {
+      expect(room.yonetebilirMi('sahip'), isTrue);
+      expect(room.yonetebilirMi('mod'), isTrue);
+      expect(room.yonetebilirMi('uye'), isFalse);
+      expect(room.yonetebilirMi(null), isFalse);
+    });
+
+    test('fotoğraf sınırı kuraldaki isPhoto ile aynı', () {
+      expect(ChatRepository.maxRoomPhotoLength, 400000);
+    });
+
+    test('copyWith fotoğrafı korur, boş değer kaldırır', () {
+      expect(room.copyWith(name: 'Yeni ad').photoUrl, room.photoUrl);
+      expect(room.copyWith(photoUrl: '').photoUrl, isEmpty);
+    });
+  });
 }

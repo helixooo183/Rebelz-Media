@@ -251,7 +251,12 @@ service cloud.firestore {
         // Özel/halka açık ayarını yalnızca sahip değiştirir.
         && (!('isPrivate' in request.resource.data.diff(resource.data)
                 .affectedKeys())
-            || isRoomOwner());
+            || isRoomOwner())
+        // Kanal/grup fotoğrafı: boyut sınırı + yalnızca sahip/moderatör.
+        && (!('photoUrl' in request.resource.data.diff(resource.data)
+                .affectedKeys())
+            || (isPhoto(request.resource.data.photoUrl)
+                && (isRoomOwner() || isRoomMod())));
 
       // Silme: DM'de iki taraf, grupta oluşturan, kanalda sahibi.
       allow delete: if signedIn()

@@ -127,6 +127,18 @@ açılır ve **Davet** ekranı gelir.
 - Elle girilen kodda otomatik katılma yapılmaz (`autoJoin` yalnızca
   bağlantıdan gelen akışta).
 
+### Kanal/grup fotoğrafı
+Ayarlar ekranındaki avatara dokun → galeriden fotoğraf seç.
+
+- Profil avatarıyla **aynı altyapı**: görsel 320 px / %68 JPEG'e küçültülür,
+  base64 `data:` URI'si olarak `rooms.photoUrl` alanına yazılır (Storage yok).
+- Üst sınır 400 000 karakter (~390 KB); tipik çıktı 10-25 KB.
+- Fotoğraf varsa dokunuşta "değiştir / kaldır" menüsü çıkar.
+- Yetki: yalnızca **sahip ve moderatörler**. Firestore kuralı da aynı şeyi
+  zorlar (`photoUrl` değişikliği `isRoomOwner() || isRoomMod()` ister), yani
+  arayüz atlatılsa bile üye fotoğrafı değiştiremez.
+- Avatar; sohbet ekranı, sohbet listesi ve kanal kartlarında otomatik güncellenir.
+
 ### Özel / herkese açık kanal
 Kanal sahibi ayarlarda **Özel kanal** anahtarını açar:
 - **Herkese açık** (varsayılan): Kanallar sekmesinde listelenir.
