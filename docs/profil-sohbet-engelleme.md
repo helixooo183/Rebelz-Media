@@ -34,8 +34,15 @@ usernames/{usernameLower}
   uid, usernameLower, createdAt        ← tekillik kilidi
 
 rooms/{roomId}                        ← dm_<uidA>_<uidB> veya grup kimliği
-  name, photoUrl, type ('dm'|'group'), createdBy, memberIds
-  lastMessage, lastMessageAt, hiddenFor, memberNames
+  name, photoUrl, type ('dm'|'group'|'channel'), createdBy, ownerUid
+  memberIds, roles {uid: 'mod'}, permissions {onlyModsPost, ...}
+  lastMessage, lastMessageAt, hiddenFor, memberNames, memberPhotos
+
+reports/{id}                          şikayetler (yalnızca ekleme)
+  reporterUid, targetUid, targetName, reason, details,
+  roomId, messageId, messageSnippet, status, createdAt
+support_requests/{id}                 destek talepleri (yalnızca ekleme)
+  uid, name, email, topic, message, status, platform, createdAt
 rooms/{roomId}/messages/{msgId}
   senderId, senderName, senderPhotoUrl, text, type, createdAt
 ```
@@ -51,7 +58,53 @@ rooms/{roomId}/messages/{msgId}
 - Alanlar: `usernameChanges` (0-2), `usernameWindowStart` (Timestamp).
   `firestore.rules` sayacın en fazla 1 artmasına izin verir.
 
-## 3. Sohbet silme
+## 3. Şikayet ve destek
+
+| Akış | Nereden | Kayıt |
+| --- | --- | --- |
+| **Profili şikayet et** | Sohbet üst menüsü → *Profili şikayet et* · yeni sohbet aramasında satıra uzun bas · kanal/grup üye listesi | `reports/{id}` |
+| **Mesajı şikayet et** | Mesaja uzun bas → *Mesajı şikayet et* | `reports/{id}` (`roomId`, `messageId`, `messageSnippet`) |
+| **Destek talebi** | Profil → *Destek ve geri bildirim* | `support_requests/{id}` |
+
+- Sebepler hazır listeden seçilir (spam, taciz, nefret söylemi, cinsel içerik,
+  şiddet tehdidi, sahte hesap, diğer) ve istenirse ayrıntı yazılır.
+- Her iki koleksiyon **yalnızca ekleme** kabul eder (kanıt niteliği); kullanıcı
+  yalnızca **kendi** kaydını okuyabilir. İnceleme paneli (moderatör tarafı)
+  sonraki adımda eklenebilir.
+- Destek ekranında taleplerin durumu (*İncelemede*) ve geçmişi görünür.
+
+## 4. Kanal ve grup ayarları
+
+Sohbet üst menüsü → **Kanal/grup ayarları** (kanal ve gruplarda görünür).
+
+| Bölüm | Kim yapabilir | Ne yapar |
+| --- | --- | --- |
+| Ad / açıklama | sahip, moderatör | Başlık ve açıklamayı günceller |
+| İzinler | sahip, moderatör | *Yalnızca moderatörler paylaşsın* (kanal), *yalnızca moderatörler üye eklesin*, *moderatörler mesaj silebilsin* |
+| Moderatörler | sahip, moderatör | Kullanıcı adıyla arayıp moderatör ekler, listeden çıkarır |
+| Üyeler | herkes görür | Sahip/moderatör: rol ver, üyeyi çıkar, şikayet et. Sahip ayrıca **sahipliği devreder** |
+| Ayrıl | herkes | Üyelikten çıkar (sahip önce devretmeli) |
+
+- Roller `rooms/{roomId}.roles` (`uid → "mod"`), izinler `permissions`
+  haritasında (`onlyModsPost`, `onlyModsAddMembers`, `modsDeleteMessages`)
+  tutulur; sahiplik `ownerUid` alanındadır (grupta yoksa `createdBy`).
+- Kanallarda varsayılan davranış **yalnızca sahip/moderatör paylaşır**;
+  `onlyModsPost` kapatılırsa tüm aboneler gönderi paylaşabilir. Yetkisiz
+  üyeler yazma alanı yerine "Yalnızca moderatörler paylaşım yapabilir" barını
+  görür.
+- Gruplarda tüm üyeler yazabilir; kısıt yalnızca üye ekleme/mesaj silme için
+  ayarlanır.
+- Kurallar: `roles`/`permissions` yalnızca sahip veya moderatör tarafından,
+  `ownerUid` yalnızca mevcut sahip tarafından ve yeni sahip üye ise
+  değiştirilebilir.
+
+## 5. Kategori değiştirme (kaydırma)
+
+Sohbetler ekranında listeyi **sola/sağa kaydırarak** kategori değişir
+(Tümü ↔ Kişiler ↔ Gruplar). Alttaki noktalar hangi kategoride olduğunu
+gösterir, dokunarak da geçilebilir.
+
+## 6. Sohbet silme
 
 Sohbet balonuna **uzun bas** ya da satırdaki **⋮** menüsü:
 
@@ -60,7 +113,7 @@ Sohbet balonuna **uzun bas** ya da satırdaki **⋮** menüsü:
 | **Sadece benden kaldır** | `rooms.hiddenFor`'a uid eklenir. Karşı taraf sohbeti görmeye devam eder. Karşı taraf yeni mesaj yazarsa sohbet ikinizde de geri gelir. |
 | **Sohbeti tamamen sil** | Tüm mesajlar (300'erli partiler) ve oda dokümanı silinir. Doğrudan sohbette iki taraf da silebilir; eski grup sohbetlerinde yalnızca oluşturan. |
 
-## 4. Engelleme
+## 7. Engelleme
 
 - Sohbet ekranı sağ üst menü → **Kişiyi engelle** (onay istenir).
 - Engellenen kişi:
@@ -73,7 +126,7 @@ Sohbet balonuna **uzun bas** ya da satırdaki **⋮** menüsü:
 - Engeli kaldırdıktan sonra sohbeti yeniden açmak için *Yeni sohbet* →
   kullanıcı adını ara.
 
-## 5. Kurulum adımları (tek seferlik)
+## 8. Kurulum adımları (tek seferlik)
 
 1. `firestore.rules` dosyasını yayınlayın:
    `firebase deploy --only firestore:rules` (ya da konsoldan yapıştırıp
@@ -88,7 +141,7 @@ Sohbet balonuna **uzun bas** ya da satırdaki **⋮** menüsü:
    (tipik 10-25 KB, üst sınır 400 000 karakter). Eski `https://` bağlantıları
    da desteklenmeye devam eder.
 
-## 6. Bilinen sınırlar
+## 9. Bilinen sınırlar
 
 - Engelleme, istemci + kural düzeyinde uygulanır; engellenen kişi teknik
   olarak yeni bir hesapla yazabilir. Kalıcı engelleme için Cloud Functions

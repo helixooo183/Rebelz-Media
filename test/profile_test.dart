@@ -222,4 +222,83 @@ void main() {
       expect(acik.kullaniciAdiKilitli, isFalse);
     });
   });
+
+  group('Kanal / grup rolleri ve izinler', () {
+    ChatRoom kanal({
+      Map<String, String> roles = const <String, String>{},
+      Map<String, bool> permissions = const <String, bool>{},
+    }) {
+      return ChatRoom(
+        id: 'k1',
+        name: 'Rebelz Duyuru',
+        createdBy: 'sahip',
+        memberIds: const ['sahip', 'mod1', 'uye1'],
+        type: RoomType.channel,
+        ownerUid: 'sahip',
+        roles: roles,
+        permissions: permissions,
+      );
+    }
+
+    test('kanalda varsayılan olarak yalnızca sahip ve moderatör paylaşır', () {
+      final room = kanal(roles: const {'mod1': ChatRoom.roleModerator});
+      expect(room.paylasabilirMi('sahip'), isTrue);
+      expect(room.paylasabilirMi('mod1'), isTrue);
+      expect(room.paylasabilirMi('uye1'), isFalse);
+    });
+
+    test('izin kapatılırsa tüm aboneler paylaşabilir', () {
+      final room = kanal(
+        permissions: const {ChatRoom.permOnlyModsPost: false},
+      );
+      expect(room.paylasabilirMi('uye1'), isTrue);
+    });
+
+    test('rol sorguları sahip/moderatör/üye ayrımını yapar', () {
+      final room = kanal(roles: const {'mod1': ChatRoom.roleModerator});
+      expect(room.rolOf('sahip'), ChatRoom.roleOwner);
+      expect(room.rolOf('mod1'), ChatRoom.roleModerator);
+      expect(room.rolOf('uye1'), ChatRoom.roleMember);
+      expect(room.sahipMi('sahip'), isTrue);
+      expect(room.yonetebilirMi('uye1'), isFalse);
+      expect(room.yonetebilirMi('mod1'), isTrue);
+    });
+
+    test('grupta sahip ownerUid yoksa oluşturana düşer', () {
+      const grup = ChatRoom(
+        id: 'g1',
+        name: 'Aile',
+        createdBy: 'kuran',
+        memberIds: ['kuran', 'uye1'],
+        type: RoomType.group,
+      );
+      expect(grup.sahip, 'kuran');
+      expect(grup.sahipMi('kuran'), isTrue);
+      // Grupta her üye yazabilir.
+      expect(grup.paylasabilirMi('uye1'), isTrue);
+    });
+
+    test('üye ekleme izni moderatörlere kısıtlanabilir', () {
+      const grup = ChatRoom(
+        id: 'g2',
+        name: 'Ekip',
+        createdBy: 'kuran',
+        memberIds: ['kuran', 'uye1'],
+        type: RoomType.group,
+        permissions: {ChatRoom.permOnlyModsAddMembers: true},
+      );
+      expect(grup.uyeEkleyebilirMi('kuran'), isTrue);
+      expect(grup.uyeEkleyebilirMi('uye1'), isFalse);
+    });
+
+    test('roles/permissions alanları modelde taşınır', () {
+      final room = kanal(
+        roles: const {'mod1': ChatRoom.roleModerator},
+        permissions: const {ChatRoom.permModsDeleteMessages: true},
+      );
+      expect(room.moderatorMu('mod1'), isTrue);
+      expect(room.moderatorlerMesajSilebilir, isTrue);
+      expect(room.yalnizModeratorlerPaylasir, isTrue);
+    });
+  });
 }

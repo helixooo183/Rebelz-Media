@@ -9,10 +9,12 @@ import '../../../core/services/services.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/widgets/empty_state.dart';
 import '../../../core/widgets/user_avatar.dart';
+import '../../moderation/presentation/report_sheet.dart';
 import '../../profile/data/user_repository.dart';
 import '../data/chat_repository.dart';
 import '../domain/models/chat_message.dart';
 import '../domain/models/chat_room.dart';
+import 'room_settings_screen.dart';
 
 /// Tek bir sohbet odasının mesaj ekranı.
 ///
@@ -206,6 +208,54 @@ class _ChatScreenState extends State<ChatScreen> {
       );
     } finally {
       if (mounted) setState(() => _isBusy = false);
+    }
+  }
+
+  Future<void> _openSettings() async {
+    await Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => RoomSettingsScreen(
+          roomId: widget.roomId,
+          repository: widget.repository,
+          userRepository: widget.userRepository,
+          currentUserId: _myUid,
+        ),
+      ),
+    );
+  }
+
+  Future<void> _reportPeer(ChatRoom? room) async {
+    final peer = _peerUid;
+    if (peer == null) return;
+    final sent = await showReportSheet(
+      context,
+      targetUid: peer,
+      targetName: room?.peerName(_myUid) ?? '',
+      roomId: widget.roomId,
+    );
+    if (sent && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Şikayetin incelemeye iletildi.')),
+      );
+    }
+  }
+
+  Future<void> _reportMessage(ChatMessage message) async {
+    final sent = await showReportSheet(
+      context,
+      targetUid: message.senderId,
+      targetName: message.senderName,
+      roomId: widget.roomId,
+      messageId: message.id,
+      messageSnippet: message.text.isNotEmpty
+          ? message.text
+          : (message.type == 'image' ? '[fotoğraf]' : '[sesli mesaj]'),
+      isMessage: true,
+    );
+    if (sent && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Mesaj şikayeti iletildi.')),
+      );
     }
   }
 
@@ -481,9 +531,37 @@ class _ChatScreenState extends State<ChatScreen> {
                       _toggleBlock(block: !_iBlockedPeer);
                     case 'delete':
                       _deleteChat();
+                    case 'settings':
+                      _openSettings();
+                    case 'report':
+                      _reportPeer(room);
                   }
                 },
                 itemBuilder: (_) => [
+                  if (room != null &&
+                      !room.isDirect &&
+                      room.hasMember(_myUid))
+                    const PopupMenuItem(
+                      value: 'settings',
+                      child: Row(
+                        children: [
+                          Icon(Icons.tune_rounded, size: 19),
+                          SizedBox(width: 10),
+                          Text('Kanal/grup ayarları'),
+                        ],
+                      ),
+                    ),
+                  if (_peerUid != null)
+                    const PopupMenuItem(
+                      value: 'report',
+                      child: Row(
+                        children: [
+                          Icon(Icons.flag_outlined, size: 19),
+                          SizedBox(width: 10),
+                          Text('Profili şikayet et'),
+                        ],
+                      ),
+                    ),
                   if (_peerUid != null)
                     PopupMenuItem(
                       value: 'block',
@@ -519,7 +597,8 @@ class _ChatScreenState extends State<ChatScreen> {
           body: Column(
             children: [
               if (_iBlockedPeer) _BlockedBanner(onUnblock: () => _toggleBlock(block: false)),
-              if (room?.isChannel == true) const _ChannelBanner(),
+              if (room?.isChannel == true && room!.paylasabilirMi(_myUid))
+                const _ChannelBanner(),
               Expanded(
                 child: StreamBuilder<List<ChatMessage>>(
                   stream: _messagesStream,
@@ -583,6 +662,7 @@ class _ChatScreenState extends State<ChatScreen> {
                             setState(() => _replyTo = message);
                             _composerFocus.requestFocus();
                           },
+                          onReport: () => _reportMessage(message),
                           onReact: (emoji) => _repository.toggleReaction(
                             widget.roomId,
                             message.id,
@@ -601,6 +681,8 @@ class _ChatScreenState extends State<ChatScreen> {
                   onCancel: _cancelRecording,
                   onSend: _finishRecording,
                 )
+              else if (room != null && !room.paylasabilirMi(_myUid))
+                _ReadOnlyBar(room: room)
               else
                 _Composer(
                   controller: _messageController,
@@ -664,6 +746,7 @@ class _MessageBubble extends StatelessWidget {
     required this.onPlay,
     required this.onReply,
     required this.onReact,
+    required this.onReport,
     this.myReaction,
   });
 
@@ -677,6 +760,7 @@ class _MessageBubble extends StatelessWidget {
   final VoidCallback onPlay;
   final VoidCallback onReply;
   final ValueChanged<String> onReact;
+  final VoidCallback onReport;
   final String? myReaction;
 
   static const _quickReactions = ['❤️', '😂', '👍', '😮', '😢', '🙏'];
@@ -980,6 +1064,15 @@ class _MessageBubble extends StatelessWidget {
                   onReact(myReaction!);
                 },
               ),
+            if (!isMine)
+              ListTile(
+                leading: const Icon(Icons.flag_outlined),
+                title: const Text('Mesajı şikayet et'),
+                onTap: () {
+                  Navigator.pop(sheetContext);
+                  onReport();
+                },
+              ),
             const SizedBox(height: 8),
           ],
         ),
@@ -1221,6 +1314,42 @@ class _ChannelBanner extends StatelessWidget {
 // --------------------------------------------------------------------------- //
 // Yazma alanı
 // --------------------------------------------------------------------------- //
+
+/// Yalnızca moderatörlerin paylaşabildiği odalarda üyeler için alt bar.
+class _ReadOnlyBar extends StatelessWidget {
+  const _ReadOnlyBar({required this.room});
+
+  final ChatRoom room;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
+      decoration: BoxDecoration(
+        color: context.card,
+        border: Border(top: BorderSide(color: context.line)),
+      ),
+      child: Row(
+        children: [
+          Icon(
+            Icons.lock_outline_rounded,
+            size: 16,
+            color: context.muted,
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              room.isChannel
+                  ? 'Yalnızca moderatörler paylaşım yapabilir.'
+                  : 'Bu grupta yalnızca moderatörler yazabilir.',
+              style: TextStyle(fontSize: 12.5, color: context.muted),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
 
 class _Composer extends StatelessWidget {
   const _Composer({

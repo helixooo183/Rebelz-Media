@@ -278,8 +278,16 @@ users/{uid}
 
 usernames/{usernameLower}      uid, usernameLower, createdAt   (tekillik kilidi)
 
+reports/{id}                   reporterUid, targetUid, targetName, reason,
+                               details, roomId, messageId, messageSnippet,
+                               status, createdAt          (şikayetler)
+support_requests/{id}          uid, name, email, topic, message, status,
+                               platform, createdAt        (destek talepleri)
+
 rooms/{roomId}
   name, about, photoUrl, type ('dm'|'group'|'channel'), createdBy, ownerUid,
+  roles {uid: 'mod'}, permissions {onlyModsPost, onlyModsAddMembers,
+  modsDeleteMessages},
   memberIds[], subscriberCount, memberNames, memberPhotos,
   lastMessage, lastMessageAt, lastSenderId, hiddenFor[],
   typing{uid: ts}, readAt{uid: ts}, createdAt
@@ -341,6 +349,11 @@ flutter test test_preview/preview_test.dart --update-goldens   # docs/screens.pn
 - [x] Sesli mesaj (`record` + `audioplayers`)
 - [x] Kanallar (yayın) ve çok üyeli gruplar
 - [ ] Medyayı Firebase Storage'a taşıma (şu an base64, ≤ ~650 KB)
+- [x] **Mesaj ve profil şikayet etme** (`reports`) + **destek talepleri**
+      (`support_requests`)
+- [x] **Kanal/grup ayarları**: moderatör ekleme-kaldırma, moderatör izinleri,
+      kanal izinleri, sahipliği devretme
+- [x] Sohbetlerde sağa/sola kaydırarak kategori değiştirme
 - [ ] Mesaj sayfalama (şu an son 200 mesaj), FCM bildirimleri
 
 ---

@@ -126,6 +126,49 @@ class _FakeChatRepository implements ChatRepository {
 
   @override
   Future<void> deleteChat(String roomId) async {}
+
+  // ------------------------------------------------- kanal / grup yönetimi
+  @override
+  Future<void> updateRoomInfo(
+    String roomId, {
+    String? name,
+    String? about,
+  }) async {}
+
+  @override
+  Future<void> setPermission(
+    String roomId,
+    String key, {
+    required bool value,
+  }) async {}
+
+  @override
+  Future<void> setModerator(
+    String roomId,
+    String uid, {
+    required bool moderator,
+  }) async {}
+
+  @override
+  Future<void> removeMember(String roomId, String uid) async {}
+
+  @override
+  Future<void> addMember(
+    String roomId, {
+    required String uid,
+    String name = '',
+    String photoUrl = '',
+  }) async {}
+
+  @override
+  Future<void> transferOwnership(String roomId, String newOwnerUid) async {}
+
+  @override
+  Future<void> leaveRoom(String roomId) async {}
+
+  @override
+  Future<Map<String, String>> fetchMemberInfo(String uid) async =>
+      const <String, String>{};
 }
 
 /// Firebase'e dokunmayan sahte kullanıcı deposu.

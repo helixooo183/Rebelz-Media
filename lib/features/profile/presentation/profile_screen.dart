@@ -6,6 +6,7 @@ import '../../../core/widgets/app_card.dart';
 import '../../../core/widgets/primary_button.dart';
 import '../../../core/widgets/user_avatar.dart';
 import '../../../core/widgets/verify_email_banner.dart';
+import '../../moderation/presentation/support_screen.dart';
 import '../data/user_repository.dart';
 import '../domain/legal_texts.dart';
 import '../domain/user_profile.dart';
@@ -68,6 +69,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
       MaterialPageRoute<bool>(
         builder: (_) => EditProfileScreen(profile: profile),
       ),
+    );
+  }
+
+  Future<void> _openSupport() async {
+    await Navigator.of(context).push(
+      MaterialPageRoute<void>(builder: (_) => const SupportScreen()),
     );
   }
 
@@ -155,18 +162,27 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     label: 'Engellenenler',
                     onTap: _openBlocked,
                   ),
+                  if (profile?.termsAccepted == true)
+                    _SettingsTile(
+                      icon: Icons.fact_check_outlined,
+                      label: 'Koşullar kabul edildi',
+                      value: _formatDate(profile!.termsAcceptedAt),
+                    ),
+                ],
+              ),
+              const SectionHeader(title: 'Yardım'),
+              _SettingsGroup(
+                children: [
                   _ActionTile(
-                    icon: Icons.description_outlined,
+                    icon: Icons.support_agent_rounded,
+                    label: 'Destek ve geri bildirim',
+                    onTap: _openSupport,
+                  ),
+                  _ActionTile(
+                    icon: Icons.gavel_rounded,
                     label: 'Kullanım koşulları',
                     trailing: 'Sürüm ${LegalTexts.version}',
                     onTap: () => showTermsSheet(context),
-                  ),
-                  _SettingsTile(
-                    icon: Icons.fact_check_outlined,
-                    label: 'Koşullar kabul edildi',
-                    value: profile?.termsAccepted == true
-                        ? _formatDate(profile!.termsAcceptedAt)
-                        : 'Hayır',
                   ),
                 ],
               ),

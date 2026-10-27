@@ -380,6 +380,124 @@ class ChatRepository {
   }
 
   // ---------------------------------------------------------------------------
+  // Kanal / grup yönetimi
+  // ---------------------------------------------------------------------------
+
+  /// Kanal veya grubun adını/açıklamasını günceller.
+  Future<void> updateRoomInfo(
+    String roomId, {
+    String? name,
+    String? about,
+  }) async {
+    _requireUid();
+    final data = <String, dynamic>{};
+    if (name != null) {
+      final trimmed = name.trim();
+      if (trimmed.length < 3) {
+        throw const ChatException('Ad en az 3 karakter olmalı.');
+      }
+      data['name'] = trimmed;
+    }
+    if (about != null) data['about'] = about.trim();
+    if (data.isEmpty) return;
+    await _rooms.doc(roomId).set(data, SetOptions(merge: true));
+  }
+
+  /// Bir izni açar/kapatır (bkz. `ChatRoom.permOnlyModsPost`).
+  Future<void> setPermission(
+    String roomId,
+    String key, {
+    required bool value,
+  }) async {
+    _requireUid();
+    await _rooms.doc(roomId).set({
+      'permissions.$key': value,
+    }, SetOptions(merge: true));
+  }
+
+  /// Üyeyi moderatör yapar ya da moderatörlüğünü kaldırır.
+  Future<void> setModerator(
+    String roomId,
+    String uid, {
+    required bool moderator,
+  }) async {
+    _requireUid();
+    await _rooms.doc(roomId).set({
+      'roles.$uid': moderator ? ChatRoom.roleModerator : ChatRoom.roleMember,
+    }, SetOptions(merge: true));
+  }
+
+  /// Üyeyi odadan çıkarır (mesajları silinmez).
+  Future<void> removeMember(String roomId, String uid) async {
+    _requireUid();
+    await _rooms.doc(roomId).set({
+      'memberIds': FieldValue.arrayRemove([uid]),
+      'subscriberCount': FieldValue.increment(-1),
+      'roles.$uid': FieldValue.delete(),
+      'memberNames.$uid': FieldValue.delete(),
+      'memberPhotos.$uid': FieldValue.delete(),
+    }, SetOptions(merge: true));
+  }
+
+  /// Odaya üye ekler (profil bilgisi verilirse adı da yazılır).
+  Future<void> addMember(
+    String roomId, {
+    required String uid,
+    String name = '',
+    String photoUrl = '',
+  }) async {
+    _requireUid();
+    final data = <String, dynamic>{
+      'memberIds': FieldValue.arrayUnion([uid]),
+      'subscriberCount': FieldValue.increment(1),
+    };
+    if (name.trim().isNotEmpty) data['memberNames.$uid'] = name.trim();
+    if (photoUrl.trim().isNotEmpty) {
+      // base64 avatarlar oda dokümanını şişirmesin.
+      if (!photoUrl.startsWith('data:')) {
+        data['memberPhotos.$uid'] = photoUrl.trim();
+      }
+    }
+    await _rooms.doc(roomId).set(data, SetOptions(merge: true));
+  }
+
+  /// Kanalın/grupların sahipliğini devreder; eski sahip moderatör olur.
+  Future<void> transferOwnership(String roomId, String newOwnerUid) async {
+    final uid = _requireUid();
+    await _rooms.doc(roomId).set({
+      'ownerUid': newOwnerUid,
+      'roles.$newOwnerUid': FieldValue.delete(),
+      'roles.$uid': ChatRoom.roleModerator,
+    }, SetOptions(merge: true));
+  }
+
+  /// Odadan ayrılır (sahip önce devretmeli — arayüz uyarır).
+  Future<void> leaveRoom(String roomId) async {
+    final uid = _requireUid();
+    await _rooms.doc(roomId).set({
+      'memberIds': FieldValue.arrayRemove([uid]),
+      'subscriberCount': FieldValue.increment(-1),
+      'hiddenFor': FieldValue.arrayUnion([uid]),
+      'roles.$uid': FieldValue.delete(),
+    }, SetOptions(merge: true));
+  }
+
+  /// Bir üyenin oda içindeki profil bilgisi (ad/fotoğraf).
+  Future<Map<String, String>> fetchMemberInfo(String uid) async {
+    try {
+      final doc = await _db.collection('users').doc(uid).get();
+      final data = doc.data() ?? const <String, dynamic>{};
+      final photo = (data['photoUrl'] as String?)?.trim() ?? '';
+      return {
+        'name': (data['displayName'] as String?)?.trim() ?? '',
+        'photoUrl': photo.startsWith('data:') ? '' : photo,
+      };
+    } catch (_) {
+      return const <String, String>{};
+    }
+  }
+
+  // ---------------------------------------------------------------------------
   // Engelleme kontrolü
   // ---------------------------------------------------------------------------
 

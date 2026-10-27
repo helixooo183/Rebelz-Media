@@ -31,6 +31,8 @@ class ChatRoom {
     this.memberPhotos = const <String, String>{},
     this.typing = const <String, DateTime>{},
     this.readAt = const <String, DateTime>{},
+    this.roles = const <String, String>{},
+    this.permissions = const <String, bool>{},
   });
 
   final String id;
@@ -65,9 +67,74 @@ class ChatRoom {
   /// uid → sohbeti son okuma zamanı (✓✓ için).
   final Map<String, DateTime> readAt;
 
+  /// uid → rol (`mod`). Sahip `owner`/`createdBy` alanında tutulur.
+  final Map<String, String> roles;
+
+  /// Kanal/grup izinleri (bkz. [permOnlyModsPost] vb.). Boş = varsayılan.
+  final Map<String, bool> permissions;
+
   bool get isDirect => type == RoomType.direct;
   bool get isGroup => type == RoomType.group;
   bool get isChannel => type == RoomType.channel;
+
+  // ------------------------------------------------------------- roller/izinler
+
+  /// Moderatör rolü değeri.
+  static const String roleModerator = 'mod';
+  static const String roleMember = 'member';
+  static const String roleOwner = 'owner';
+
+  /// Yalnızca moderatörler gönderi paylaşsın (kanallarda varsayılan: evet).
+  static const String permOnlyModsPost = 'onlyModsPost';
+
+  /// Yalnızca moderatörler üye ekleyebilsin.
+  static const String permOnlyModsAddMembers = 'onlyModsAddMembers';
+
+  /// Moderatörler mesaj silebilsin.
+  static const String permModsDeleteMessages = 'modsDeleteMessages';
+
+  /// Kanalın/grupların sahibi (grup için `ownerUid` yoksa oluşturan).
+  String get sahip => ownerUid.isNotEmpty ? ownerUid : createdBy;
+
+  bool sahipMi(String? uid) => uid != null && uid.isNotEmpty && uid == sahip;
+
+  bool moderatorMu(String? uid) =>
+      uid != null && roles[uid] == roleModerator;
+
+  /// Kanal/grup yönetimini (ayarlar, rol, üye çıkarma) yapabilir mi?
+  bool yonetebilirMi(String? uid) => sahipMi(uid) || moderatorMu(uid);
+
+  String rolOf(String? uid) {
+    if (sahipMi(uid)) return roleOwner;
+    if (moderatorMu(uid)) return roleModerator;
+    return roleMember;
+  }
+
+  /// Kanalda varsayılan davranış: yalnızca sahip/moderatör yazar.
+  bool get yalnizModeratorlerPaylasir =>
+      permissions[permOnlyModsPost] ?? isChannel;
+
+  bool get yalnizModeratorlerUyeEkler =>
+      permissions[permOnlyModsAddMembers] ?? false;
+
+  bool get moderatorlerMesajSilebilir =>
+      permissions[permModsDeleteMessages] ?? false;
+
+  /// [uid] bu odaya gönderi yazabilir mi?
+  bool paylasabilirMi(String? uid) {
+    if (uid == null) return false;
+    if (isChannel) {
+      return sahipMi(uid) || moderatorMu(uid) || !yalnizModeratorlerPaylasir;
+    }
+    return true;
+  }
+
+  /// [uid] yeni üye ekleyebilir mi?
+  bool uyeEkleyebilirMi(String? uid) {
+    if (uid == null) return false;
+    if (!yalnizModeratorlerUyeEkler) return hasMember(uid);
+    return sahipMi(uid) || moderatorMu(uid);
+  }
 
   bool hasMember(String? uid) => uid != null && memberIds.contains(uid);
 
@@ -137,6 +204,8 @@ class ChatRoom {
       memberPhotos: memberPhotos,
       typing: typing,
       readAt: readAt,
+      roles: roles,
+      permissions: permissions,
     );
   }
 
@@ -163,6 +232,8 @@ class ChatRoom {
     final rawPhotos = (data['memberPhotos'] as Map?)?.cast<String, dynamic>();
     final rawTyping = (data['typing'] as Map?)?.cast<String, dynamic>();
     final rawRead = (data['readAt'] as Map?)?.cast<String, dynamic>();
+    final rawRoles = (data['roles'] as Map?)?.cast<String, dynamic>();
+    final rawPerms = (data['permissions'] as Map?)?.cast<String, dynamic>();
 
     final memberNames = {
       for (final entry in (rawNames ?? const <String, dynamic>{}).entries)
@@ -182,6 +253,15 @@ class ChatRoom {
       final value = entry.value;
       if (value is Timestamp) readAt[entry.key] = value.toDate();
     }
+
+    final roles = <String, String>{
+      for (final entry in (rawRoles ?? const <String, dynamic>{}).entries)
+        entry.key: (entry.value ?? '').toString(),
+    };
+    final permissions = <String, bool>{
+      for (final entry in (rawPerms ?? const <String, dynamic>{}).entries)
+        entry.key: entry.value == true,
+    };
 
     var name = (data['name'] as String?)?.trim().isNotEmpty == true
         ? (data['name'] as String).trim()
@@ -223,6 +303,8 @@ class ChatRoom {
       memberPhotos: memberPhotos,
       typing: typing,
       readAt: readAt,
+      roles: roles,
+      permissions: permissions,
     );
   }
 

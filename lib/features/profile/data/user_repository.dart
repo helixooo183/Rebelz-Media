@@ -251,15 +251,43 @@ class UserRepository {
   Future<void> acceptTerms({String version = LegalTexts.version}) async {
     final uid = _requireUid();
     final user = _auth.currentUser;
-    final batch = _db.batch();
+    final docRef = _users.doc(uid);
 
-    batch.set(_users.doc(uid), {
+    // Doküman henüz yoksa güvenlik kuralının `create` dalı çalışır; o dal
+    // `displayName` gibi zorunlu alanları da ister. Bu yüzden ilk kayıtta
+    // profil alanları da yazılır — aksi hâlde onay "hiç kaydedilmemiş" gibi
+    // görünüyordu (kullanıcı kabul etse bile hatırlatma tekrar çıkıyordu).
+    var exists = false;
+    try {
+      exists = (await docRef.get()).exists;
+    } catch (_) {
+      exists = false;
+    }
+
+    final base = <String, dynamic>{
       'termsAcceptedAt': FieldValue.serverTimestamp(),
       'termsVersion': version,
       'lastSeenAt': FieldValue.serverTimestamp(),
-    }, SetOptions(merge: true));
+    };
 
-    batch.set(_users.doc(uid).collection('consents').doc(), {
+    if (!exists) {
+      final name = user?.displayName?.trim().isNotEmpty == true
+          ? user!.displayName!.trim()
+          : (user?.email?.split('@').first ?? 'Kullanıcı');
+      base.addAll({
+        'displayName': name,
+        'displayNameLower': name.toLowerCase(),
+        'email': user?.email ?? '',
+        'emailVerified': user?.emailVerified ?? false,
+        'createdAt': FieldValue.serverTimestamp(),
+      });
+    }
+
+    final batch = _db.batch();
+    batch.set(docRef, base, SetOptions(merge: true));
+
+    // Değiştirilemez kanıt kaydı: uid, e-posta, sürüm, cihaz, zaman.
+    batch.set(docRef.collection('consents').doc(), {
       'uid': uid,
       'email': user?.email ?? '',
       'version': version,
