@@ -36,6 +36,7 @@ usernames/{usernameLower}
 rooms/{roomId}                        ← dm_<uidA>_<uidB> veya grup kimliği
   name, photoUrl, type ('dm'|'group'|'channel'), createdBy, ownerUid
   memberIds, roles {uid: 'mod'}, permissions {onlyModsPost, ...}
+  isPrivate (özel kanal/grup)
   lastMessage, lastMessageAt, hiddenFor, memberNames, memberPhotos
 
 reports/{id}                          şikayetler (yalnızca ekleme)
@@ -43,6 +44,8 @@ reports/{id}                          şikayetler (yalnızca ekleme)
   roomId, messageId, messageSnippet, status, createdAt
 support_requests/{id}                 destek talepleri (yalnızca ekleme)
   uid, name, email, topic, message, status, platform, createdAt
+room_invites/{code}                   davet bağlantıları
+  roomId, createdBy, roomName, roomType, createdAt
 rooms/{roomId}/messages/{msgId}
   senderId, senderName, senderPhotoUrl, text, type, createdAt
 ```
@@ -98,13 +101,38 @@ Sohbet üst menüsü → **Kanal/grup ayarları** (kanal ve gruplarda görünür
   `ownerUid` yalnızca mevcut sahip tarafından ve yeni sahip üye ise
   değiştirilebilir.
 
-## 5. Kategori değiştirme (kaydırma)
+## 5. Davet bağlantıları ve kanal arama
+
+### Davet bağlantısı (kanal + grup)
+Sohbet üst menüsü → **Kanal/grup ayarları** → *Davet bağlantısı*:
+- **Bağlantı oluştur** → 8 karakterlik kod üretir, `rebelzmedia://katil/<kod>`
+  bağlantısı **panoya kopyalanır** (WhatsApp/e-posta ile paylaşılabilir).
+- Altında geçerli kodlar listelenir: kopyala / iptal et.
+- Karşı taraf katılmak için **Kanallar → sağ üstteki kod düğmesi → Davet ile
+  katıl** alanına bağlantıyı ya da yalnızca kodu yazar. Katılan kişi otomatik
+  üye olur, üye sayacı artar; davet edilen kanal/grup listede görünür.
+
+Kayıt: `room_invites/{code}` → `roomId`, `createdBy`, `roomName`, `roomType`,
+`createdAt`. Kod, karıştırılabilen karakterler (0/O, 1/I) kullanılmadan
+`A-Z 2-9` alfabesinden üretilir.
+
+### Özel / herkese açık kanal
+Kanal sahibi ayarlarda **Özel kanal** anahtarını açar:
+- **Herkese açık** (varsayılan): Kanallar sekmesinde listelenir.
+- **Özel**: keşfette görünmez; yalnızca davet bağlantısı/kodu ile katılınır.
+  Üyesi olduğun özel kanallar listede kilit simgesiyle görünür.
+
+### Kanal arama
+Kanallar sekmesinde üstte **arama çubuğu** vardır; kanal adı ve açıklamasında
+aranır. Sonuç yoksa doğrudan "Kod ile katıl" önerilir.
+
+## 6. Kategori değiştirme (kaydırma)
 
 Sohbetler ekranında listeyi **sola/sağa kaydırarak** kategori değişir
 (Tümü ↔ Kişiler ↔ Gruplar). Alttaki noktalar hangi kategoride olduğunu
 gösterir, dokunarak da geçilebilir.
 
-## 6. Sohbet silme
+## 7. Sohbet silme
 
 Sohbet balonuna **uzun bas** ya da satırdaki **⋮** menüsü:
 
@@ -113,7 +141,7 @@ Sohbet balonuna **uzun bas** ya da satırdaki **⋮** menüsü:
 | **Sadece benden kaldır** | `rooms.hiddenFor`'a uid eklenir. Karşı taraf sohbeti görmeye devam eder. Karşı taraf yeni mesaj yazarsa sohbet ikinizde de geri gelir. |
 | **Sohbeti tamamen sil** | Tüm mesajlar (300'erli partiler) ve oda dokümanı silinir. Doğrudan sohbette iki taraf da silebilir; eski grup sohbetlerinde yalnızca oluşturan. |
 
-## 7. Engelleme
+## 8. Engelleme
 
 - Sohbet ekranı sağ üst menü → **Kişiyi engelle** (onay istenir).
 - Engellenen kişi:
@@ -126,7 +154,7 @@ Sohbet balonuna **uzun bas** ya da satırdaki **⋮** menüsü:
 - Engeli kaldırdıktan sonra sohbeti yeniden açmak için *Yeni sohbet* →
   kullanıcı adını ara.
 
-## 8. Kurulum adımları (tek seferlik)
+## 9. Kurulum adımları (tek seferlik)
 
 1. `firestore.rules` dosyasını yayınlayın:
    `firebase deploy --only firestore:rules` (ya da konsoldan yapıştırıp
@@ -141,7 +169,7 @@ Sohbet balonuna **uzun bas** ya da satırdaki **⋮** menüsü:
    (tipik 10-25 KB, üst sınır 400 000 karakter). Eski `https://` bağlantıları
    da desteklenmeye devam eder.
 
-## 9. Bilinen sınırlar
+## 10. Bilinen sınırlar
 
 - Engelleme, istemci + kural düzeyinde uygulanır; engellenen kişi teknik
   olarak yeni bir hesapla yazabilir. Kalıcı engelleme için Cloud Functions

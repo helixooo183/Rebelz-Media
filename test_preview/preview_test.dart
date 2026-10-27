@@ -23,6 +23,7 @@ import 'package:sohbet/features/auth/presentation/splash_screen.dart';
 import 'package:sohbet/features/chat/data/chat_repository.dart';
 import 'package:sohbet/features/chat/domain/models/chat_message.dart';
 import 'package:sohbet/features/chat/domain/models/chat_room.dart';
+import 'package:sohbet/features/chat/domain/models/room_invite.dart';
 import 'package:sohbet/features/chat/presentation/channels_screen.dart';
 import 'package:sohbet/features/chat/presentation/chat_screen.dart';
 import 'package:sohbet/features/chat/presentation/new_chat_sheet.dart';
@@ -110,7 +111,11 @@ class _FakeChatRepository implements ChatRepository {
   ) async {}
 
   @override
-  Future<String> createChannel({required String name, String about = ''}) async =>
+  Future<String> createChannel({
+    required String name,
+    String about = '',
+    bool isPrivate = false,
+  }) async =>
       'kanal_fake';
 
   @override
@@ -129,6 +134,37 @@ class _FakeChatRepository implements ChatRepository {
   Future<void> deleteChat(String roomId) async {}
 
   // ------------------------------------------------- kanal / grup yönetimi
+  @override
+  Future<RoomInvite> createInvite({
+    required String roomId,
+    String roomName = '',
+    String roomType = '',
+  }) async =>
+      RoomInvite(
+        code: 'K7M2P9QD',
+        roomId: roomId,
+        createdBy: 'u1',
+        roomName: roomName,
+        roomType: roomType,
+      );
+
+  @override
+  Stream<List<RoomInvite>> watchInvites(String roomId) => Stream.value(
+        const <RoomInvite>[],
+      );
+
+  @override
+  Future<void> revokeInvite(String code) async {}
+
+  @override
+  Future<String> joinByInviteCode(String rawCode) async => 'r1';
+
+  @override
+  Future<void> setChannelPrivacy(
+    String roomId, {
+    required bool isPrivate,
+  }) async {}
+
   @override
   Future<void> updateRoomInfo(
     String roomId, {

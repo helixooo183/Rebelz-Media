@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../../../core/services/services.dart';
 import '../../../core/theme/app_colors.dart';
@@ -8,6 +9,7 @@ import '../../profile/data/user_repository.dart';
 import '../../profile/domain/user_profile.dart';
 import '../data/chat_repository.dart';
 import '../domain/models/chat_room.dart';
+import '../domain/models/room_invite.dart';
 
 /// Kanal ve grup ayarları.
 ///
@@ -228,6 +230,45 @@ class _RoomSettingsScreenState extends State<RoomSettingsScreen> {
     }, '${picked.displayName} moderatör olarak eklendi.');
   }
 
+  /// Yeni davet bağlantısı üretir ve panoya kopyalar.
+  Future<void> _createInvite(ChatRoom room) async {
+    setState(() => _isBusy = true);
+    try {
+      final invite = await _repo.createInvite(
+        roomId: room.id,
+        roomName: room.name,
+        roomType: room.type,
+      );
+      await Clipboard.setData(ClipboardData(text: invite.link));
+      _toast('Davet bağlantısı kopyalandı: ${invite.link}');
+    } catch (e) {
+      _toast('Davet oluşturulamadı: $e');
+    } finally {
+      if (mounted) setState(() => _isBusy = false);
+    }
+  }
+
+  Future<void> _copyInvite(RoomInvite invite) async {
+    await Clipboard.setData(ClipboardData(text: invite.link));
+    _toast('Bağlantı kopyalandı.');
+  }
+
+  Future<void> _revokeInvite(RoomInvite invite) async {
+    await _run(
+      () => _repo.revokeInvite(invite.code),
+      'Davet bağlantısı iptal edildi.',
+    );
+  }
+
+  Future<void> _setPrivacy(ChatRoom room, bool isPrivate) async {
+    await _run(
+      () => _repo.setChannelPrivacy(room.id, isPrivate: isPrivate),
+      isPrivate
+          ? 'Kanal özel oldu: yalnızca davetle katılınır.'
+          : 'Kanal herkese açık: keşfette listelenir.',
+    );
+  }
+
   Future<void> _leave(ChatRoom room) async {
     final isOwner = room.sahipMi(_myUid);
     final others = room.memberIds.where((id) => id != _myUid).toList();
@@ -288,6 +329,69 @@ class _RoomSettingsScreenState extends State<RoomSettingsScreen> {
                           : () => _editInfo(room),
                     ),
                     const SizedBox(height: 20),
+                    if (room.isChannel && room.sahipMi(_myUid))
+                      _Section(
+                        title: 'Görünürlük',
+                        children: [
+                          SwitchListTile(
+                            value: room.isPrivate,
+                            onChanged: _isBusy
+                                ? null
+                                : (value) => _setPrivacy(room, value),
+                            title: const Text('Özel kanal'),
+                            subtitle: Text(
+                              room.isPrivate
+                                  ? 'Keşfette görünmez; yalnızca davet '
+                                      'bağlantısıyla katılınır.'
+                                  : 'Herkese açık: kanallar listesinde '
+                                      'görünür.',
+                              style: TextStyle(
+                                fontSize: 11.5,
+                                color: context.muted,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    if (room.isChannel && room.sahipMi(_myUid))
+                      const SizedBox(height: 18),
+                    if (room.yonetebilirMi(_myUid))
+                      _Section(
+                        title: 'Davet bağlantısı',
+                        children: [
+                          ListTile(
+                            leading: Icon(
+                              Icons.link_rounded,
+                              size: 20,
+                              color: context.colors.primary,
+                            ),
+                            title: Text(
+                              'Bağlantı oluştur',
+                              style: TextStyle(
+                                fontSize: 14,
+                                fontWeight: FontWeight.w600,
+                                color: context.colors.primary,
+                              ),
+                            ),
+                            subtitle: Text(
+                              'Kopyalanır, paylaşabilirsin. Katılan kişi '
+                              'otomatik üye olur.',
+                              style: TextStyle(
+                                fontSize: 11.5,
+                                color: context.muted,
+                              ),
+                            ),
+                            onTap: _isBusy ? null : () => _createInvite(room),
+                          ),
+                          _InviteList(
+                            roomId: room.id,
+                            repository: _repo,
+                            onCopy: _copyInvite,
+                            onRevoke: _isBusy ? null : _revokeInvite,
+                          ),
+                        ],
+                      ),
+                    if (room.yonetebilirMi(_myUid)) const SizedBox(height: 18),
                     if (room.yonetebilirMi(_myUid))
                       _Section(
                         title: 'İzinler',
@@ -619,6 +723,83 @@ class _MemberRow extends StatelessWidget {
       ),
       trailing: const Icon(Icons.chevron_right_rounded, size: 18),
       onTap: onTap,
+    );
+  }
+}
+
+/// Odanın geçerli davet bağlantıları listesi.
+class _InviteList extends StatelessWidget {
+  const _InviteList({
+    required this.roomId,
+    required this.repository,
+    required this.onCopy,
+    required this.onRevoke,
+  });
+
+  final String roomId;
+  final ChatRepository repository;
+  final ValueChanged<RoomInvite> onCopy;
+  final ValueChanged<RoomInvite>? onRevoke;
+
+  @override
+  Widget build(BuildContext context) {
+    return StreamBuilder<List<RoomInvite>>(
+      stream: repository.watchInvites(roomId),
+      builder: (context, snapshot) {
+        final invites = snapshot.data ?? const <RoomInvite>[];
+        if (invites.isEmpty) {
+          return Padding(
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 14),
+            child: Text(
+              'Henüz davet bağlantısı yok.',
+              style: TextStyle(fontSize: 12, color: context.muted),
+            ),
+          );
+        }
+
+        return Column(
+          children: [
+            for (final invite in invites)
+              ListTile(
+                dense: true,
+                leading: Icon(Icons.key_rounded, size: 18, color: context.muted),
+                title: SelectableText(
+                  invite.code,
+                  style: const TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: 1.4,
+                  ),
+                ),
+                subtitle: Text(
+                  RoomInvite.linkFor(invite.code),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(fontSize: 11, color: context.muted),
+                ),
+                trailing: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    IconButton(
+                      tooltip: 'Kopyala',
+                      onPressed: () => onCopy(invite),
+                      icon: const Icon(Icons.copy_rounded, size: 17),
+                    ),
+                    IconButton(
+                      tooltip: 'İptal et',
+                      onPressed: onRevoke == null ? null : () => onRevoke!(invite),
+                      icon: Icon(
+                        Icons.delete_outline_rounded,
+                        size: 18,
+                        color: context.colors.error,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+          ],
+        );
+      },
     );
   }
 }

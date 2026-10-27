@@ -188,6 +188,7 @@ service cloud.firestore {
              'subscriberCount', 'createdAt', 'lastMessage', 'lastMessageAt',
              'lastSenderId', 'type', 'photoUrl', 'hiddenFor', 'memberNames',
              'memberPhotos', 'typing', 'readAt', 'roles', 'permissions',
+             'isPrivate',
            ])
         && isNonEmptyString(request.resource.data.name, 80)
         && request.resource.data.memberIds.size() >= 1
@@ -209,7 +210,7 @@ service cloud.firestore {
                'lastMessage', 'lastMessageAt', 'lastSenderId', 'memberIds',
                'hiddenFor', 'name', 'about', 'photoUrl', 'memberNames',
                'memberPhotos', 'type', 'typing', 'readAt', 'subscriberCount',
-               'roles', 'permissions', 'ownerUid',
+               'roles', 'permissions', 'ownerUid', 'isPrivate',
              ])
         && (request.resource.data.diff(resource.data).affectedKeys()
               .hasOnly(['typing', 'readAt', 'hiddenFor', 'memberIds',
@@ -240,7 +241,11 @@ service cloud.firestore {
                 .affectedKeys())
             || (isRoomOwner()
                 && request.resource.data.ownerUid
-                     in request.resource.data.memberIds));
+                     in request.resource.data.memberIds))
+        // Özel/halka açık ayarını yalnızca sahip değiştirir.
+        && (!('isPrivate' in request.resource.data.diff(resource.data)
+                .affectedKeys())
+            || isRoomOwner());
 
       // Silme: DM'de iki taraf, grupta oluşturan, kanalda sahibi.
       allow delete: if signedIn()
@@ -300,6 +305,25 @@ service cloud.firestore {
                   && (isRoomOwner() || isRoomMod()))
               || (isRoomOwner() && !isChannel()));
       }
+    }
+
+    // ----------------------------------------------------------- room_invites
+    // Davet bağlantıları: oluşturan yazar/iptal eder, giriş yapan herkes
+    // kodu okuyabilir (katılmak için gereken tek bilgi kodun kendisidir).
+    match /room_invites/{code} {
+      allow get: if signedIn();
+      allow list: if false;
+      allow create: if signedIn()
+        && request.resource.data.createdBy == request.auth.uid
+        && isNonEmptyString(request.resource.data.roomId, 128)
+        && request.resource.data.keys().hasOnly([
+             'roomId', 'createdBy', 'roomName', 'roomType', 'createdAt',
+           ]);
+      allow update: if false;
+      allow delete: if signedIn()
+        && (resource.data.createdBy == request.auth.uid
+            || get(/databases/$(database)/documents/rooms/$(resource.data.roomId))
+                 .data.get('ownerUid', '') == request.auth.uid);
     }
 
     // ---------------------------------------------------------------- reports

@@ -33,6 +33,7 @@ class ChatRoom {
     this.readAt = const <String, DateTime>{},
     this.roles = const <String, String>{},
     this.permissions = const <String, bool>{},
+    this.isPrivate = false,
   });
 
   final String id;
@@ -72,6 +73,12 @@ class ChatRoom {
 
   /// Kanal/grup izinleri (bkz. [permOnlyModsPost] vb.). Boş = varsayılan.
   final Map<String, bool> permissions;
+
+  /// Özel kanal/grup: keşfet listesinde görünmez, yalnızca davetle katılınır.
+  final bool isPrivate;
+
+  /// Keşfette listelenir mi? (özel olmayan kanallar)
+  bool get herkeseAcikKanal => isChannel && !isPrivate;
 
   bool get isDirect => type == RoomType.direct;
   bool get isGroup => type == RoomType.group;
@@ -206,6 +213,7 @@ class ChatRoom {
       readAt: readAt,
       roles: roles,
       permissions: permissions,
+      isPrivate: isPrivate,
     );
   }
 
@@ -305,6 +313,7 @@ class ChatRoom {
       readAt: readAt,
       roles: roles,
       permissions: permissions,
+      isPrivate: data['isPrivate'] == true,
     );
   }
 

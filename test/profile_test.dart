@@ -3,6 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:sohbet/core/theme/app_theme.dart';
 import 'package:sohbet/features/chat/data/chat_repository.dart';
 import 'package:sohbet/features/chat/domain/models/chat_room.dart';
+import 'package:sohbet/features/chat/domain/models/room_invite.dart';
 import 'package:sohbet/features/profile/domain/legal_texts.dart';
 import 'package:sohbet/features/profile/domain/user_profile.dart';
 import 'package:sohbet/features/profile/presentation/terms_sheet.dart';
@@ -299,6 +300,62 @@ void main() {
       expect(room.moderatorMu('mod1'), isTrue);
       expect(room.moderatorlerMesajSilebilir, isTrue);
       expect(room.yalnizModeratorlerPaylasir, isTrue);
+    });
+  });
+
+  group('Davet kodu', () {
+    test('kod 8 karakter ve karışmayan alfabeden üretilir', () {
+      for (var i = 0; i < 200; i++) {
+        final code = generateInviteCode();
+        expect(code.length, 8);
+        expect(RegExp(r'^[A-HJ-NP-Z2-9]{8}$').hasMatch(code), isTrue);
+      }
+    });
+
+    test('bağlantı ve kod aynı normalize sonucu verir', () {
+      expect(normalizeInviteCode('K7M2P9QD'), 'K7M2P9QD');
+      expect(
+        normalizeInviteCode('rebelzmedia://katil/K7M2P9QD'),
+        'K7M2P9QD',
+      );
+      expect(
+        normalizeInviteCode('https://ornek.com/katil/k7m2p9qd'),
+        'K7M2P9QD',
+      );
+      expect(normalizeInviteCode('  '), '');
+    });
+
+    test('bağlantı biçimi ve paylaşım metni', () {
+      const invite = RoomInvite(
+        code: 'K7M2P9QD',
+        roomId: 'c1',
+        createdBy: 'u1',
+        roomName: 'Rebelz Duyuru',
+        roomType: 'channel',
+      );
+      expect(invite.link, 'rebelzmedia://katil/K7M2P9QD');
+      expect(invite.shareText, contains('rebelzmedia://katil/K7M2P9QD'));
+      expect(invite.shareText, contains('kanalına'));
+    });
+
+    test('özel kanal keşfette gizlenir', () {
+      const acik = ChatRoom(
+        id: 'a',
+        name: 'Açık',
+        createdBy: 'u1',
+        memberIds: ['u1'],
+        type: RoomType.channel,
+      );
+      const ozel = ChatRoom(
+        id: 'b',
+        name: 'Özel',
+        createdBy: 'u1',
+        memberIds: ['u1'],
+        type: RoomType.channel,
+        isPrivate: true,
+      );
+      expect(acik.herkeseAcikKanal, isTrue);
+      expect(ozel.herkeseAcikKanal, isFalse);
     });
   });
 }
