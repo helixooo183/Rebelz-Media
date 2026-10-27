@@ -6,6 +6,8 @@
 //   flutter test test_preview/preview_test.dart --update-goldens
 //
 // Çıktılar: test_preview/goldens/*.png
+// CI: .github/workflows/screenshots.yml bu dosyayı çalıştırıp görselleri
+// docs/ekranlar/ altına işler.
 // Not: `flutter test` bu klasörü taramaz (test/ dışında olduğu için).
 
 import 'dart:io';
@@ -13,6 +15,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:sohbet/core/theme/app_colors.dart';
 import 'package:sohbet/core/theme/app_theme.dart';
 import 'package:sohbet/features/auth/presentation/login_screen.dart';
 import 'package:sohbet/features/auth/presentation/register_screen.dart';
@@ -21,10 +24,17 @@ import 'package:sohbet/features/chat/data/chat_repository.dart';
 import 'package:sohbet/features/chat/domain/models/chat_message.dart';
 import 'package:sohbet/features/chat/domain/models/chat_room.dart';
 import 'package:sohbet/features/chat/presentation/chat_screen.dart';
+import 'package:sohbet/features/chat/presentation/new_chat_sheet.dart';
 import 'package:sohbet/features/chat/presentation/rooms_screen.dart';
+import 'package:sohbet/features/profile/data/user_repository.dart';
+import 'package:sohbet/features/profile/domain/user_profile.dart';
+import 'package:sohbet/features/profile/presentation/blocked_users_screen.dart';
+import 'package:sohbet/features/profile/presentation/edit_profile_screen.dart';
+import 'package:sohbet/features/profile/presentation/profile_screen.dart';
+import 'package:sohbet/features/profile/presentation/terms_sheet.dart';
 import 'package:sohbet/features/setup/setup_screen.dart';
 
-/// Firebase'e dokunmayan sahte depo.
+/// Firebase'e dokunmayan sahte sohbet deposu.
 class _FakeChatRepository implements ChatRepository {
   _FakeChatRepository({this.rooms = const [], this.messages = const []});
 
@@ -67,29 +77,135 @@ class _FakeChatRepository implements ChatRepository {
   Future<void> deleteChat(String roomId) async {}
 }
 
-Future<void> _loadFonts() async {
-  const fontDir =
-      '/var/tmp/flutter/bin/cache/artifacts/material_fonts';
+/// Firebase'e dokunmayan sahte kullanıcı deposu.
+class _FakeUserRepository implements UserRepository {
+  _FakeUserRepository({
+    required this.me,
+    this.directory = const [],
+    this.blocked = const [],
+    this.blockedProfiles = const [],
+  });
 
-  final roboto = FontLoader('Roboto');
-  for (final file in ['Roboto-Regular.ttf', 'Roboto-Medium.ttf', 'Roboto-Bold.ttf']) {
-    roboto.addFont(
-      Future.value(
-        ByteData.view(File('$fontDir/$file').readAsBytesSync().buffer),
-      ),
+  final UserProfile me;
+  final List<UserProfile> directory;
+  final Set<String> blocked;
+  final List<UserProfile> blockedProfiles;
+
+  @override
+  Stream<UserProfile?> watchProfile(String uid) =>
+      Stream.value(uid == me.uid ? me : null);
+
+  @override
+  Stream<UserProfile?> watchMyProfile() => Stream.value(me);
+
+  @override
+  Future<UserProfile?> fetchProfile(String uid) async =>
+      uid == me.uid ? me : null;
+
+  @override
+  Future<List<UserProfile>> searchUsers(
+    String rawQuery, {
+    Set<String> excludeUids = const <String>{},
+  }) async {
+    final query = rawQuery.toLowerCase().trim();
+    return directory
+        .where((p) =>
+            p.displayName.toLowerCase().contains(query) ||
+            p.usernameLower.contains(query))
+        .toList();
+  }
+
+  @override
+  Future<void> saveProfile({
+    required String displayName,
+    required String username,
+    String bio = '',
+    String photoUrl = '',
+    String avatarEmoji = '',
+    int avatarColor = 0,
+  }) async {}
+
+  @override
+  Future<void> touchLastSeen() async {}
+
+  @override
+  Future<void> acceptTerms({String version = '2026-10-27'}) async {}
+
+  @override
+  Stream<Set<String>> watchBlockedUids() => Stream.value(blocked);
+
+  @override
+  Future<Set<String>> fetchBlockedUids() async => blocked;
+
+  @override
+  Future<void> blockUser(String blockedUid) async {}
+
+  @override
+  Future<void> unblockUser(String blockedUid) async {}
+
+  @override
+  Future<List<UserProfile>> fetchBlockedProfiles() async => blockedProfiles;
+}
+
+/// Fontların bulunduğu Flutter SDK kökünü bulur.
+///
+/// CI'da FLUTTER_ROOT tanımlıdır; yerelde de çalışabilmesi için çalışan
+/// dart'ın yolundan yukarı doğru `bin/cache/artifacts/material_fonts`
+/// aranır.
+String? _flutterRoot() {
+  final env = Platform.environment['FLUTTER_ROOT'];
+  if (env != null && env.trim().isNotEmpty) return env.trim();
+
+  var dir = File(Platform.resolvedExecutable).parent;
+  while (true) {
+    if (Directory('${dir.path}/bin/cache/artifacts/material_fonts')
+        .existsSync()) {
+      return dir.path;
+    }
+    // dart-sdk içinden gelindiyse: <flutter>/bin/cache/dart-sdk/bin/dart
+    if (Directory('${dir.path}/artifacts/material_fonts').existsSync()) {
+      return dir.parent.parent.path;
+    }
+    final parent = dir.parent;
+    if (parent.path == dir.path) return null;
+    dir = parent;
+  }
+}
+
+Future<void> _loadFonts() async {
+  final root = _flutterRoot();
+  final fontDir = Directory('$root/bin/cache/artifacts/material_fonts');
+  if (root == null || !fontDir.existsSync()) {
+    throw StateError(
+      'Flutter font klasörü bulunamadı (FLUTTER_ROOT=$root). '
+      'Golden görüntüler font olmadan anlamsız olur.',
     );
   }
-  await roboto.load();
 
-  final icons = FontLoader('MaterialIcons')
-    ..addFont(
-      Future.value(
-        ByteData.view(
-          File('$fontDir/MaterialIcons-Regular.otf').readAsBytesSync().buffer,
-        ),
-      ),
+  final roboto = FontLoader('Roboto');
+  var loaded = false;
+  for (final name in [
+    'Roboto-Regular.ttf',
+    'Roboto-Medium.ttf',
+    'Roboto-Bold.ttf',
+  ]) {
+    final file = File('${fontDir.path}/$name');
+    if (!file.existsSync()) continue;
+    roboto.addFont(
+      Future.value(ByteData.view(file.readAsBytesSync().buffer)),
     );
-  await icons.load();
+    loaded = true;
+  }
+  if (loaded) await roboto.load();
+
+  final iconsFile = File('${fontDir.path}/MaterialIcons-Regular.otf');
+  if (iconsFile.existsSync()) {
+    final icons = FontLoader('MaterialIcons')
+      ..addFont(
+        Future.value(ByteData.view(iconsFile.readAsBytesSync().buffer)),
+      );
+    await icons.load();
+  }
 }
 
 Widget _wrap(Widget child) => MaterialApp(
@@ -102,8 +218,9 @@ void main() {
   setUpAll(_loadFonts);
 
   setUp(() {
-    // iPhone 14 benzeri mantıksal ölçüler (390 x 844), 2x yoğunluk.
-    final view = TestWidgetsFlutterBinding.instance.platformDispatcher.views.first;
+    // iPhone 14 benzeri mantıksal ölçüler (390 x 844), 3x yoğunluk.
+    final view =
+        TestWidgetsFlutterBinding.instance.platformDispatcher.views.first;
     view.physicalSize = const Size(1170, 2532);
     view.devicePixelRatio = 3.0;
   });
@@ -116,6 +233,7 @@ void main() {
       name: 'Tasarım Ekibi',
       createdBy: 'u1',
       memberIds: const ['u1', 'u2'],
+      type: 'dm',
       lastMessage: 'Yeni ekran akışını Figma\'ya yükledim',
       lastMessageAt: DateTime(now.year, now.month, now.day, 14, 32),
     ),
@@ -124,6 +242,7 @@ void main() {
       name: 'Deniz',
       createdBy: 'u2',
       memberIds: const ['u1', 'u2'],
+      type: 'dm',
       lastMessage: 'Akşam 8 gibi orada olurum.',
       lastMessageAt: DateTime(now.year, now.month, now.day, 11, 5),
     ),
@@ -176,6 +295,52 @@ void main() {
     ),
   ];
 
+  final me = UserProfile(
+    uid: 'u1',
+    displayName: 'Ayşe Yılmaz',
+    username: 'ayse_y',
+    bio: 'Ürün tasarımcısı · Flutter ile ilgileniyorum.',
+    avatarEmoji: '🦊',
+    avatarColor: 1,
+    email: 'ayse@example.com',
+    termsVersion: '2026-10-27',
+    termsAcceptedAt: now,
+  );
+
+  const deniz = UserProfile(
+    uid: 'u2',
+    displayName: 'Deniz Kaya',
+    username: 'deniz_k',
+    bio: 'Mobil geliştirici',
+    avatarEmoji: '🐺',
+    avatarColor: 3,
+  );
+
+  const emre = UserProfile(
+    uid: 'u3',
+    displayName: 'Emre Demir',
+    username: 'emre_d',
+    avatarEmoji: '🚀',
+    avatarColor: 2,
+  );
+
+  final users = _FakeUserRepository(
+    me: me,
+    directory: const [
+      deniz,
+      emre,
+      UserProfile(
+        uid: 'u4',
+        displayName: 'Deniz Su',
+        username: 'deniz_su',
+        avatarEmoji: '🌙',
+        avatarColor: 4,
+      ),
+    ],
+    blocked: const {'u3'},
+    blockedProfiles: const [emre],
+  );
+
   testWidgets('01 splash', (tester) async {
     await tester.pumpWidget(_wrap(const SplashScreen()));
     await tester.pump();
@@ -194,7 +359,7 @@ void main() {
     );
   });
 
-  testWidgets('03 register', (tester) async {
+  testWidgets('03 register (koşul onayı kutusu)', (tester) async {
     await tester.pumpWidget(_wrap(const RegisterScreen()));
     await tester.pump();
     await expectLater(
@@ -208,11 +373,14 @@ void main() {
       _wrap(
         RoomsScreen(
           repository: _FakeChatRepository(rooms: rooms),
+          userRepository: users,
           currentUserName: 'Ayşe Yılmaz',
+          myUid: 'u1',
         ),
       ),
     );
-    await tester.pumpAndSettle();
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 50));
     await expectLater(
       find.byType(MaterialApp),
       matchesGoldenFile('goldens/04_rooms.png'),
@@ -224,11 +392,14 @@ void main() {
       _wrap(
         RoomsScreen(
           repository: _FakeChatRepository(),
+          userRepository: users,
           currentUserName: 'Ayşe Yılmaz',
+          myUid: 'u1',
         ),
       ),
     );
-    await tester.pumpAndSettle();
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 50));
     await expectLater(
       find.byType(MaterialApp),
       matchesGoldenFile('goldens/05_rooms_empty.png'),
@@ -241,12 +412,14 @@ void main() {
         ChatScreen(
           roomId: 'r1',
           roomName: 'Tasarım Ekibi',
-          repository: _FakeChatRepository(messages: messages),
+          repository: _FakeChatRepository(rooms: rooms, messages: messages),
+          userRepository: users,
           currentUserId: 'u1',
         ),
       ),
     );
-    await tester.pumpAndSettle();
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 50));
     await expectLater(
       find.byType(MaterialApp),
       matchesGoldenFile('goldens/06_chat.png'),
@@ -259,6 +432,97 @@ void main() {
     await expectLater(
       find.byType(MaterialApp),
       matchesGoldenFile('goldens/07_setup.png'),
+    );
+  });
+
+  testWidgets('08 profil', (tester) async {
+    await tester.pumpWidget(
+      _wrap(ProfileScreen(repository: users)),
+    );
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 50));
+    await expectLater(
+      find.byType(MaterialApp),
+      matchesGoldenFile('goldens/08_profile.png'),
+    );
+  });
+
+  testWidgets('09 profil düzenleme', (tester) async {
+    await tester.pumpWidget(
+      _wrap(EditProfileScreen(profile: me, repository: users)),
+    );
+    await tester.pump();
+    await expectLater(
+      find.byType(MaterialApp),
+      matchesGoldenFile('goldens/09_profile_edit.png'),
+    );
+  });
+
+  testWidgets('10 yeni sohbet (kullanıcı adı arama)', (tester) async {
+    await tester.pumpWidget(
+      _wrap(
+        Scaffold(
+          backgroundColor: AppColors.background,
+          body: Align(
+            alignment: Alignment.bottomCenter,
+            child: NewChatSheet(repository: users),
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    await tester.enterText(find.byType(TextField).first, 'deniz');
+    await tester.pump(const Duration(milliseconds: 300));
+    await tester.pump(const Duration(milliseconds: 300));
+
+    await expectLater(
+      find.byType(MaterialApp),
+      matchesGoldenFile('goldens/10_new_chat.png'),
+    );
+  });
+
+  testWidgets('11 engellenenler', (tester) async {
+    await tester.pumpWidget(
+      _wrap(BlockedUsersScreen(repository: users)),
+    );
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 50));
+    await expectLater(
+      find.byType(MaterialApp),
+      matchesGoldenFile('goldens/11_blocked.png'),
+    );
+  });
+
+  testWidgets('12 kullanım koşulları', (tester) async {
+    await tester.pumpWidget(_wrap(const TermsScreen()));
+    await tester.pump();
+    await expectLater(
+      find.byType(MaterialApp),
+      matchesGoldenFile('goldens/12_terms.png'),
+    );
+  });
+
+  final blocking = _FakeUserRepository(me: me, blocked: const {'u2'});
+
+  testWidgets('13 sohbet — engellenen kişi', (tester) async {
+    await tester.pumpWidget(
+      _wrap(
+        ChatScreen(
+          roomId: 'r1',
+          roomName: 'Tasarım Ekibi',
+          repository: _FakeChatRepository(rooms: rooms, messages: messages),
+          userRepository: blocking,
+          currentUserId: 'u1',
+        ),
+      ),
+    );
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 100));
+    await tester.pump(const Duration(milliseconds: 100));
+    await expectLater(
+      find.byType(MaterialApp),
+      matchesGoldenFile('goldens/13_chat_blocked.png'),
     );
   });
 }

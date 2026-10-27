@@ -60,7 +60,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     if (confirmed != true) return;
 
     setState(() => _isSigningOut = true);
-    await authServiceInstance.signOut();
+    await authServiceOrNull?.signOut();
     // GoRouter redirect oturumun kapandığını görüp login'e yönlendirir.
   }
 
@@ -80,7 +80,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final user = authServiceInstance.currentUser;
+    // Test/önizleme ortamında Firebase yoksa null döner.
+    final auth = authServiceOrNull;
+    final user = auth?.currentUser;
     final providers = user?.providerData
             .map((info) => info.providerId)
             .where((id) => id.isNotEmpty)
@@ -99,7 +101,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
         final name = profile?.displayName ??
             (user?.displayName?.trim().isNotEmpty == true
                 ? user!.displayName!.trim()
-                : authServiceInstance.displayName);
+                : currentUserNameOrNull ?? 'Kullanıcı');
 
         return Scaffold(
           appBar: AppBar(

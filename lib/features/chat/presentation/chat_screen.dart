@@ -17,6 +17,7 @@ class ChatScreen extends StatefulWidget {
     required this.roomId,
     required this.roomName,
     this.repository,
+    this.userRepository,
     this.currentUserId,
   });
 
@@ -25,6 +26,7 @@ class ChatScreen extends StatefulWidget {
 
   /// Test/önizleme için enjekte edilebilir bağımlılıklar.
   final ChatRepository? repository;
+  final UserRepository? userRepository;
   final String? currentUserId;
 
   @override
@@ -55,6 +57,7 @@ class _ChatScreenState extends State<ChatScreen> {
   String? _peerUid;
 
   UserRepository? get _userRepo {
+    if (widget.userRepository != null) return widget.userRepository;
     if (_users != null) return _users;
     try {
       return _users = userRepositoryInstance;
