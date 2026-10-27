@@ -90,7 +90,7 @@ görünür):
 | Anahtar | SHA-1 | İstemci |
 |---|---|---|
 | debug (paket ortamı) | `CA:D5:F0:42:CD:90:19:D7:61:E9:90:66:40:8A:D6:21:1C:A9:4C:4A` | `…5i07fq5h70qo3ec8e8aa71klairquk8m` |
-| release / upload | `92:A0:55:FE:C3:85:15:49:CC:45:8D:60:F1:E9:C4:B1:F4:D7:CC:3D` | `…gl8m2ep7vlbjninu1udlehpbjssmct8j` |
+| release / upload | `2E:96:3D:A6:63:06:D1:8F:34:A8:E5:1A:BD:7C:24:F1:41:B8:6E:8D` | `…r8iknp2phdcsnddc9j66983vi10oaari` |
 
 Doğrulama: `python3 tool/firebase_from_services_json.py --check`
 
