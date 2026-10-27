@@ -3,29 +3,63 @@ import 'package:flutter/material.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/widgets/app_logo.dart';
 
-/// Oturum bilgisi yüklenirken gösterilen ekran.
+/// Oturum bilgisi yüklenirken gösterilen açılış ekranı.
 class SplashScreen extends StatelessWidget {
   const SplashScreen({super.key});
 
   @override
   Widget build(BuildContext context) {
-    return const Scaffold(
-      body: DecoratedBox(
-        decoration: BoxDecoration(gradient: AppColors.backgroundGlow),
-        child: Center(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              AppLogo(size: 76),
-              SizedBox(height: 28),
-              SizedBox(
-                height: 22,
-                width: 22,
-                child: CircularProgressIndicator(strokeWidth: 2.2),
+    return Scaffold(
+      backgroundColor: const Color(0xFF060607),
+      body: Stack(
+        children: [
+          Positioned.fill(
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                gradient: RadialGradient(
+                  center: const Alignment(0, -0.12),
+                  radius: 0.72,
+                  colors: [
+                    AppColors.brand.withValues(alpha: 0.15),
+                    const Color(0xFF08080A),
+                  ],
+                ),
               ),
-            ],
+            ),
           ),
-        ),
+          const Center(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                RebelzLogo(height: 48),
+                SizedBox(height: 34),
+                SizedBox(
+                  height: 20,
+                  width: 20,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    color: AppColors.brand,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          Positioned(
+            left: 0,
+            right: 0,
+            bottom: 42,
+            child: Text(
+              'SOHBET · KANAL · TOPLULUK',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: 10.5,
+                letterSpacing: 2.4,
+                fontWeight: FontWeight.w700,
+                color: Colors.white.withValues(alpha: 0.45),
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }

@@ -5,12 +5,13 @@ import '../theme/app_colors.dart';
 /// Avatar renk paleti (profil düzenlemede seçilir).
 abstract final class AvatarPalette {
   static const List<List<Color>> gradients = [
-    [AppColors.primary, Color(0xFFB15CFF)],
-    [Color(0xFF22D3EE), Color(0xFF3B82F6)],
-    [Color(0xFF34D399), Color(0xFF10B981)],
-    [Color(0xFFFF5C7A), Color(0xFFF97316)],
-    [Color(0xFFFBBF24), Color(0xFFF97316)],
-    [Color(0xFF64748B), Color(0xFF334155)],
+    [AppColors.brand, Color(0xFF7F0D17)],
+    [Color(0xFFFF6B4A), Color(0xFFC2185B)],
+    [Color(0xFF7C5CFF), Color(0xFF3B2A9E)],
+    [Color(0xFF22D3EE), Color(0xFF1D4ED8)],
+    [Color(0xFF34D399), Color(0xFF0F766E)],
+    [Color(0xFFFBBF24), Color(0xFFEA580C)],
+    [Color(0xFF94A3B8), Color(0xFF334155)],
   ];
 
   static List<Color> of(int index) {
@@ -19,33 +20,46 @@ abstract final class AvatarPalette {
   }
 }
 
+/// İsimden deterministik bir avatar rengi üretir (grup mesajlarında gönderen
+/// adı rengi için).
+Color avatarColorFor(String name) {
+  if (name.trim().isEmpty) return AvatarPalette.gradients.first.first;
+  var hash = 0;
+  for (final rune in name.trim().runes) {
+    hash = (hash * 31 + rune) & 0x7fffffff;
+  }
+  return AvatarPalette.gradients[hash % AvatarPalette.gradients.length].first;
+}
+
 /// Avatar: profil fotoğrafı → emoji → baş harf sırasıyla gösterilir.
 ///
-/// `photoUrl` yüklenemezse (ağ hatası, silinmiş görsel) sessizce emoji/baş
-/// harfe düşer; bu yüzden internete bağımlı olmadan da çalışır.
+/// [ring] true ise etrafında marka rengi halka çizilir (hikâye/aktif).
+/// [online] true ise sağ altta yeşil nokta görünür.
 class UserAvatar extends StatelessWidget {
   const UserAvatar({
     super.key,
     required this.name,
-    this.size = 40,
-    this.highlighted = false,
+    this.size = 44,
     this.photoUrl,
     this.emoji,
     this.colorIndex = 0,
+    this.ring = false,
+    this.online = false,
+    this.isGroup = false,
+    this.highlighted = false,
   });
 
   final String name;
   final double size;
-  final bool highlighted;
-
-  /// Profil fotoğrafı adresi (http/https). Boşsa emoji/baş harf çizilir.
   final String? photoUrl;
-
-  /// Fotoğraf yoksa gösterilecek emoji (ör. "🐺").
   final String? emoji;
-
-  /// [AvatarPalette.gradients] içindeki renk indeksi.
   final int colorIndex;
+  final bool ring;
+  final bool online;
+  final bool isGroup;
+
+  /// Eski çağrılarla uyumluluk: marka gradyanlı halka.
+  final bool highlighted;
 
   String get _initial {
     final trimmed = name.trim();
@@ -57,72 +71,121 @@ class UserAvatar extends StatelessWidget {
 
   bool get _hasEmoji => !_hasPhoto && (emoji ?? '').trim().isNotEmpty;
 
-  String get _emoji => (emoji ?? '').trim();
-
   @override
   Widget build(BuildContext context) {
-    final gradient = highlighted
-        ? AppColors.primaryGradient
-        : LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: AvatarPalette.of(colorIndex),
-          );
+    final radius = isGroup ? size * 0.32 : size / 2;
 
-    final fallback = Container(
-      height: size,
-      width: size,
+    final core = ClipRRect(
+      borderRadius: BorderRadius.circular(radius),
+      child: SizedBox(
+        height: size,
+        width: size,
+        child: _hasPhoto
+            ? Image.network(
+                photoUrl!.trim(),
+                fit: BoxFit.cover,
+                errorBuilder: (_, _, _) => _fallback(context, radius),
+                loadingBuilder: (context, child, progress) {
+                  if (progress == null) return child;
+                  return Container(
+                    color: context.cardHigh,
+                    alignment: Alignment.center,
+                    child: SizedBox(
+                      height: size * 0.3,
+                      width: size * 0.3,
+                      child: const CircularProgressIndicator(strokeWidth: 2),
+                    ),
+                  );
+                },
+              )
+            : _fallback(context, radius),
+      ),
+    );
+
+    final showRing = ring || highlighted;
+
+    return SizedBox(
+      height: size + (showRing ? 6 : 0),
+      width: size + (showRing ? 6 : 0),
+      child: Stack(
+        alignment: Alignment.center,
+        children: [
+          if (showRing)
+            Container(
+              height: size + 6,
+              width: size + 6,
+              decoration: BoxDecoration(
+                shape: isGroup ? BoxShape.rectangle : BoxShape.circle,
+                borderRadius: isGroup
+                    ? BorderRadius.circular(radius + 3)
+                    : null,
+                gradient: AppColors.brandGradient,
+                boxShadow: [
+                  BoxShadow(
+                    color: AppColors.brand.withValues(alpha: 0.35),
+                    blurRadius: 14,
+                    offset: const Offset(0, 4),
+                  ),
+                ],
+              ),
+            ),
+          if (showRing)
+            Container(
+              height: size + 1,
+              width: size + 1,
+              decoration: BoxDecoration(
+                color: Theme.of(context).scaffoldBackgroundColor,
+                shape: isGroup ? BoxShape.rectangle : BoxShape.circle,
+                borderRadius:
+                    isGroup ? BorderRadius.circular(radius + 1) : null,
+              ),
+            ),
+          core,
+          if (online)
+            Positioned(
+              right: showRing ? 2 : 0,
+              bottom: showRing ? 2 : 0,
+              child: Container(
+                height: size * 0.28,
+                width: size * 0.28,
+                decoration: BoxDecoration(
+                  color: AppColors.success,
+                  shape: BoxShape.circle,
+                  border: Border.all(
+                    color: Theme.of(context).scaffoldBackgroundColor,
+                    width: 2,
+                  ),
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _fallback(BuildContext context, double radius) {
+    return Container(
       alignment: Alignment.center,
       decoration: BoxDecoration(
-        shape: BoxShape.circle,
-        gradient: gradient,
-        border: highlighted
-            ? null
-            : Border.all(color: AppColors.outline, width: 1),
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: AvatarPalette.of(colorIndex),
+        ),
       ),
       child: _hasEmoji
           ? Text(
-              _emoji,
+              (emoji ?? '').trim(),
               style: TextStyle(fontSize: size * 0.46),
             )
           : Text(
               _initial,
               style: TextStyle(
                 fontSize: size * 0.4,
-                fontWeight: FontWeight.w700,
-                color: highlighted ? Colors.white : AppColors.textPrimary,
+                fontWeight: FontWeight.w800,
+                color: Colors.white,
               ),
             ),
-    );
-
-    if (!_hasPhoto) return fallback;
-
-    return ClipOval(
-      child: Image.network(
-        photoUrl!.trim(),
-        height: size,
-        width: size,
-        fit: BoxFit.cover,
-        // Özel fotoğraf varsa da hata durumunda renkli baş harfe dön.
-        errorBuilder: (_, _, _) => fallback,
-        loadingBuilder: (context, child, progress) {
-          if (progress == null) return child;
-          return Container(
-            height: size,
-            width: size,
-            alignment: Alignment.center,
-            decoration: const BoxDecoration(
-              shape: BoxShape.circle,
-              color: AppColors.surfaceHigh,
-            ),
-            child: SizedBox(
-              height: size * 0.35,
-              width: size * 0.35,
-              child: const CircularProgressIndicator(strokeWidth: 2),
-            ),
-          );
-        },
-      ),
     );
   }
 }

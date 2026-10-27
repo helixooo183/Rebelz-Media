@@ -1,8 +1,12 @@
 import 'package:flutter/material.dart';
 
+import '../theme/app_colors.dart';
 import 'google_logo.dart';
 
-/// Google marka kurallarına yakın: beyaz zemin, koyu metin, sol tarafta logo.
+/// Google ile giriş butonu.
+///
+/// Marka kurallarına uygun olarak gerçek dört renkli "G" logosu kullanılır;
+/// zemin temaya göre beyaz (açık) ya da koyu yüzey olur.
 class GoogleSignInButton extends StatelessWidget {
   const GoogleSignInButton({
     super.key,
@@ -18,15 +22,19 @@ class GoogleSignInButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isEnabled = onPressed != null && !isLoading;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return AnimatedOpacity(
-      duration: const Duration(milliseconds: 180),
-      opacity: isEnabled ? 1 : 0.6,
+      duration: const Duration(milliseconds: 160),
+      opacity: isEnabled ? 1 : 0.55,
       child: Container(
         height: 54,
         decoration: BoxDecoration(
-          color: Colors.white,
+          color: isDark ? const Color(0xFFF7F7F9) : Colors.white,
           borderRadius: BorderRadius.circular(16),
+          border: Border.all(
+            color: isDark ? Colors.transparent : context.line,
+          ),
         ),
         child: Material(
           color: Colors.transparent,
@@ -46,7 +54,7 @@ class GoogleSignInButton extends StatelessWidget {
                   : Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        const GoogleLogo(size: 20),
+                        const GoogleLogo(size: 21),
                         const SizedBox(width: 12),
                         Text(
                           label,

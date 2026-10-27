@@ -1,14 +1,14 @@
 rules_version = '2';
 
-// Rebelz Media / Sohbet — Firestore güvenlik kuralları
+// Rebelz Media — Firestore güvenlik kuralları
 //
 // Model:
 //   users/{uid}                          kullanıcı profili (sahibi yazar)
 //   users/{uid}/consents/{id}            koşul onay kayıtları (kanıt)
 //   users/{uid}/blocked/{blockedUid}     engellenen kullanıcılar
 //   usernames/{usernameLower}            kullanıcı adı tekilliği (kilit)
-//   rooms/{roomId}                       sohbet (type: dm | group)
-//   rooms/{roomId}/messages/{msgId}      mesajlar
+//   rooms/{roomId}                       sohbet (type: dm | group | channel)
+//   rooms/{roomId}/messages/{msgId}      mesajlar (metin/fotoğraf/ses)
 //
 // Kullanıcı adı araması (`displayNameLower`/`usernameLower` aralık sorgusu)
 // için Firestore'da tek alan indeksleri (otomatik) yeterlidir.
@@ -80,7 +80,7 @@ service cloud.firestore {
       }
 
       // --------------------------------------------------------- engelleme
-      // Herkes okuyabilir: gönderen, "karşı taraf beni engelledi mi?"
+      // Herkes okuyabilir: gönderen "karşı taraf beni engelledi mi?"
       // kontrolünü ancak böyle yapabilir (mesaj kuralı da bunu kullanır).
       match /blocked/{blockedUid} {
         allow read: if signedIn();
@@ -91,15 +91,15 @@ service cloud.firestore {
     }
 
     // ------------------------------------------------------------ usernames
-    // Kullanıcı adı talebi: sahibi oluşturur/siler, herkes okuyabilir.
+    // Kullanıcı adı kilidi: sahibi oluşturur/siler, herkes tekil okur.
     match /usernames/{usernameLower} {
-      // Yalnızca tekil okuma (kullanıcı adı müsait mi?) — liste kapalı.
       allow get: if signedIn();
       allow list: if false;
-      allow create, update: if isOwner(request.resource.data.uid)
+      allow create, update: if signedIn()
         && request.resource.data.uid == request.auth.uid
-        && usernameLower == request.resource.data.usernameLower;
-      allow delete: if isOwner(resource.data.uid);
+        && request.resource.data.usernameLower == usernameLower
+        && isUsername(request.resource.data.usernameLower);
+      allow delete: if signedIn() && resource.data.uid == request.auth.uid;
     }
 
     // ---------------------------------------------------------------- rooms
@@ -112,74 +112,128 @@ service cloud.firestore {
         return signedIn() && request.auth.uid in room().memberIds;
       }
 
+      function isChannel() {
+        return room().type == 'channel';
+      }
+
+      // Kanal sahibi mi? (kanal dışındaki sohbetlerde iki taraf da eşittir.)
+      function canWriteContent() {
+        return !isChannel() || room().ownerUid == request.auth.uid;
+      }
+
       // Karşı taraf beni engellediyse mesaj gönderemem. Doğrudan sohbetler
       // iki üyelidir; iki üyenin `blocked` listesi kontrol edilir.
       function peerBlockedMe() {
-        let members = room().memberIds;
-        return members.size() == 2
-          && (exists(/databases/$(database)/documents/users/$(members[0])
+        return room().memberIds.size() == 2
+          && (exists(/databases/$(database)/documents/users/$(room().memberIds[0])
                      /blocked/$(request.auth.uid))
-              || exists(/databases/$(database)/documents/users/$(members[1])
+              || exists(/databases/$(database)/documents/users/$(room().memberIds[1])
                      /blocked/$(request.auth.uid)));
       }
 
-      // Yalnızca üyeler okur. `list` kuralı her doküman için ayrı
-      // değerlendirildiği için başkasının sohbeti görülemez.
       allow get: if isMember();
-      allow list: if signedIn() && request.auth.uid in resource.data.memberIds;
 
-      // Yeni sohbet: kendisi üye olmalı; doğrudan sohbette iki üye olur.
+      // Sorgu güvenliği: sohbetler `memberIds array-contains uid`, kanallar
+      // `type == 'channel'` filtresiyle çekilir; iki kural da kanıtlanabilir.
+      allow list: if signedIn()
+        && (request.auth.uid in resource.data.memberIds
+            || resource.data.type == 'channel');
+
+      // Yeni sohbet / grup / kanal.
       allow create: if signedIn()
         && request.auth.uid in request.resource.data.memberIds
-        && request.resource.data.memberIds.size() <= 2
         && request.resource.data.createdBy == request.auth.uid
         && request.resource.data.keys().hasOnly([
-             'name', 'createdBy', 'memberIds', 'createdAt', 'lastMessage',
-             'lastMessageAt', 'type', 'photoUrl', 'hiddenFor', 'memberNames',
-             'memberPhotos',
+             'name', 'about', 'createdBy', 'ownerUid', 'memberIds',
+             'subscriberCount', 'createdAt', 'lastMessage', 'lastMessageAt',
+             'lastSenderId', 'type', 'photoUrl', 'hiddenFor', 'memberNames',
+             'memberPhotos', 'typing', 'readAt',
            ])
         && isNonEmptyString(request.resource.data.name, 80)
-        && request.resource.data.name.size() >= 1
+        && request.resource.data.memberIds.size() >= 1
+        && request.resource.data.memberIds.size() <= 200
+        && request.resource.data.memberIds.size() ==
+             request.resource.data.memberIds.toSet().size()
         && (!('type' in request.resource.data)
-            || request.resource.data.type in ['dm', 'group']);
+            || request.resource.data.type in ['dm', 'group', 'channel'])
+        // Kanal açan kişi sahibi olur; DM/grup kanal olamaz.
+        && (request.resource.data.type != 'channel'
+            || request.resource.data.ownerUid == request.auth.uid)
+        && (request.resource.data.type == 'channel'
+            || !('ownerUid' in request.resource.data));
 
-      // Son mesaj, üye listesi, gizleme ve ad/fotoğraf tazelenebilir.
+      // Son mesaj, üye listesi, gizleme, "yazıyor…" ve okundu bilgisi.
       allow update: if isMember()
         && request.resource.data.diff(resource.data).affectedKeys()
              .hasOnly([
-               'lastMessage', 'lastMessageAt', 'memberIds', 'hiddenFor',
-               'name', 'photoUrl', 'memberNames', 'memberPhotos', 'type',
+               'lastMessage', 'lastMessageAt', 'lastSenderId', 'memberIds',
+               'hiddenFor', 'name', 'about', 'photoUrl', 'memberNames',
+               'memberPhotos', 'type', 'typing', 'readAt', 'subscriberCount',
              ])
+        && (request.resource.data.diff(resource.data).affectedKeys()
+              .hasOnly(['typing', 'readAt', 'hiddenFor', 'memberIds',
+                        'memberNames', 'memberPhotos'])
+            || canWriteContent())
         && (!('lastMessage' in request.resource.data.diff(resource.data)
                 .affectedKeys())
-            || isNonEmptyString(request.resource.data.lastMessage, 2000));
+            || isNonEmptyString(request.resource.data.lastMessage, 2000))
+        && (!('subscriberCount' in request.resource.data.diff(resource.data)
+                .affectedKeys())
+            || isChannel())
+        && (!('memberIds' in request.resource.data.diff(resource.data)
+                .affectedKeys())
+            || request.resource.data.memberIds.size() <= 200);
 
-      // Silme: grubu yalnızca oluşturan; doğrudan sohbeti iki taraf da.
+      // Silme: DM'de iki taraf, grupta oluşturan, kanalda sahibi.
       allow delete: if signedIn()
-        && ((resource.data.type == 'dm'
-              && request.auth.uid in resource.data.memberIds)
-            || (resource.data.createdBy == request.auth.uid
-              && request.auth.uid in resource.data.memberIds));
+        && request.auth.uid in resource.data.memberIds
+        && (resource.data.type == 'dm'
+            || (resource.data.type == 'group'
+                && resource.data.createdBy == request.auth.uid)
+            || (resource.data.type == 'channel'
+                && resource.data.ownerUid == request.auth.uid));
 
       // ------------------------------------------------------------- mesajlar
       match /messages/{messageId} {
-        allow read: if signedIn() && request.auth.uid in room().memberIds;
+        allow read: if isMember();
 
-        allow create: if signedIn()
-          && request.auth.uid in room().memberIds
+        allow create: if isMember()
           && !peerBlockedMe()
           && request.resource.data.senderId == request.auth.uid
           && request.resource.data.keys().hasOnly([
                'senderId', 'senderName', 'senderPhotoUrl', 'text', 'type',
-               'createdAt',
+               'mediaBase64', 'mediaMime', 'durationMs', 'reply', 'reactions',
+               'readBy', 'deleted', 'editedAt', 'createdAt',
              ])
-          && isNonEmptyString(request.resource.data.text, 2000)
-          && isNonEmptyString(request.resource.data.senderName, 80);
+          && isNonEmptyString(request.resource.data.senderName, 80)
+          && request.resource.data.type in ['text', 'image', 'audio', 'system']
+          && (!('mediaBase64' in request.resource.data)
+              || request.resource.data.mediaBase64.size() <= 900000)
+          && (!('mediaMime' in request.resource.data)
+              || request.resource.data.mediaMime.size() <= 80)
+          && (!('durationMs' in request.resource.data)
+              || (request.resource.data.durationMs is int
+                  && request.resource.data.durationMs >= 0
+                  && request.resource.data.durationMs <= 300000))
+          // Metin mesajı boş olamaz; medya mesajlarında metin opsiyoneldir.
+          && (request.resource.data.type != 'text'
+              || isNonEmptyString(request.resource.data.text, 2000))
+          && (!('text' in request.resource.data)
+              || request.resource.data.text.size() <= 2000)
+          // Kanala yalnızca sahibi yazar.
+          && (!isChannel() || room().ownerUid == request.auth.uid);
 
-        // Mesaj içeriği değiştirilemez; silme yalnızca sohbeti silme
-        // akışında (üyeler) yapılabilir.
-        allow update: if false;
-        allow delete: if signedIn() && request.auth.uid in room().memberIds;
+        // Tepki, okundu, düzenleme ve "silindi" işaretleri.
+        allow update: if isMember()
+          && request.resource.data.diff(resource.data).affectedKeys()
+               .hasOnly(['reactions', 'readBy', 'text', 'editedAt', 'deleted',
+                         'mediaBase64', 'mediaMime', 'durationMs'])
+          && (request.resource.data.diff(resource.data).affectedKeys()
+                .hasOnly(['reactions', 'readBy'])
+              || resource.data.senderId == request.auth.uid);
+
+        // Sohbeti silme akışı için üyeler mesajları kaldırabilir.
+        allow delete: if isMember();
       }
     }
 

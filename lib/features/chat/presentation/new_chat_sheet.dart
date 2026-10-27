@@ -8,31 +8,45 @@ import '../../../core/widgets/app_text_field.dart';
 import '../../../core/widgets/user_avatar.dart';
 import '../../profile/data/user_repository.dart';
 import '../../profile/domain/user_profile.dart';
+import '../data/chat_repository.dart';
 
 /// Kullanıcı adı ve görünen adla başlayan sohbet için kullanıcı seçimi.
 ///
 /// "[Yeni sohbet]" butonundan açılır: kullanıcı adı yazıldıkça eşleşen
 /// profiller (fotoğraf + ad + @kullanıcıadı) listelenir.
-Future<String?> showNewChatSheet(BuildContext context) {
+Future<String?> showNewChatSheet(
+  BuildContext context, {
+  UserRepository? userRepository,
+  ChatRepository? chatRepository,
+}) {
   return showModalBottomSheet<String>(
     context: context,
     isScrollControlled: true,
     backgroundColor: Colors.transparent,
-    builder: (_) => const NewChatSheet(),
+    builder: (_) => NewChatSheet(
+      userRepository: userRepository,
+      chatRepository: chatRepository,
+    ),
   );
 }
 
 class NewChatSheet extends StatefulWidget {
-  const NewChatSheet({super.key, this.repository});
+  const NewChatSheet({super.key, this.repository, this.userRepository, this.chatRepository});
 
+  /// Eski çağrılarla uyumluluk.
   final UserRepository? repository;
+  final UserRepository? userRepository;
+  final ChatRepository? chatRepository;
 
   @override
   State<NewChatSheet> createState() => _NewChatSheetState();
 }
 
 class _NewChatSheetState extends State<NewChatSheet> {
-  late final UserRepository _users = widget.repository ?? userRepositoryInstance;
+  late final UserRepository _users =
+      widget.userRepository ?? widget.repository ?? userRepositoryInstance;
+  late final ChatRepository _chats = widget.chatRepository ?? chatRepositoryInstance;
+
   final _controller = TextEditingController();
 
   List<UserProfile> _results = const [];
@@ -83,7 +97,7 @@ class _NewChatSheetState extends State<NewChatSheet> {
 
     setState(() => _isSearching = true);
     try {
-      final found = await _users.searchUsers(query);
+      final found = await _users.searchUsers(query, excludeUids: _blocked);
       if (!mounted) return;
       setState(() {
         _results = found;
@@ -103,7 +117,7 @@ class _NewChatSheetState extends State<NewChatSheet> {
 
   Future<void> _startChat(UserProfile profile) async {
     try {
-      final roomId = await chatRepositoryInstance.openDirectChat(
+      final roomId = await _chats.openDirectChat(
         peerUid: profile.uid,
         peerName: profile.displayName,
         peerPhotoUrl: profile.photoUrl,
@@ -125,11 +139,11 @@ class _NewChatSheetState extends State<NewChatSheet> {
     return Padding(
       padding: EdgeInsets.only(bottom: viewInsets),
       child: Container(
-        height: MediaQuery.sizeOf(context).height * 0.78,
-        decoration: const BoxDecoration(
-          color: AppColors.background,
-          borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-          border: Border(top: BorderSide(color: AppColors.outline)),
+        height: MediaQuery.sizeOf(context).height * 0.82,
+        decoration: BoxDecoration(
+          color: context.colors.surface,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(26)),
+          border: Border(top: BorderSide(color: context.line)),
         ),
         child: Column(
           children: [
@@ -138,154 +152,122 @@ class _NewChatSheetState extends State<NewChatSheet> {
               height: 4,
               width: 44,
               decoration: BoxDecoration(
-                color: AppColors.outline,
+                color: context.line,
                 borderRadius: BorderRadius.circular(2),
               ),
             ),
             Padding(
-              padding: const EdgeInsets.fromLTRB(20, 16, 12, 8),
+              padding: const EdgeInsets.fromLTRB(20, 16, 12, 4),
               child: Row(
                 children: [
-                  const Expanded(
+                  Expanded(
                     child: Text(
                       'Yeni sohbet',
-                      style: TextStyle(
-                        fontSize: 19,
-                        fontWeight: FontWeight.w700,
-                      ),
+                      style: context.texts.headlineSmall,
                     ),
                   ),
                   IconButton(
-                    onPressed: () => Navigator.of(context).pop(),
-                    icon: const Icon(Icons.close),
-                    tooltip: 'Kapat',
+                    onPressed: () => Navigator.of(context).maybePop(),
+                    icon: const Icon(Icons.close_rounded),
                   ),
                 ],
               ),
             ),
             Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 20),
+              padding: const EdgeInsets.fromLTRB(20, 4, 20, 10),
               child: AppTextField(
                 controller: _controller,
-                hintText: 'kullanıcı adı (ör. ayse_y)',
-                prefixIcon: Icons.alternate_email,
+                hintText: '@kullanıcıadı veya isim',
+                labelText: 'Kullanıcı ara',
+                prefixIcon: Icons.search_rounded,
+                autofocus: true,
                 textInputAction: TextInputAction.search,
-                onSubmitted: (value) {
-                  _debounce?.cancel();
-                  _search(value);
-                },
               ),
             ),
-            const SizedBox(height: 8),
-            Expanded(child: _buildBody()),
+            Expanded(child: _buildResults(context)),
           ],
         ),
       ),
     );
   }
 
-  Widget _buildBody() {
-    if (_isSearching) {
+  Widget _buildResults(BuildContext context) {
+    if (_isSearching && _results.isEmpty) {
       return const Center(child: CircularProgressIndicator());
     }
 
     if (_error != null) {
-      return _Info(
-        icon: Icons.cloud_off_outlined,
-        title: 'Arama başarısız',
+      return _Hint(
+        icon: Icons.cloud_off_rounded,
+        title: 'Arama yapılamadı',
         message: _error!,
       );
     }
 
     if (!_hasSearched) {
-      return const _Info(
-        icon: Icons.person_search_outlined,
+      return const _Hint(
+        icon: Icons.alternate_email_rounded,
         title: 'Kullanıcı adıyla ara',
-        message: 'Yazdığın kullanıcı adıyla eşleşen kişiler burada listelenir. '
-            'Sohbet başlatmak için birine dokun.',
+        message:
+            'Sohbet başlatmak için kişinin kullanıcı adını (@ayse_y) ya da '
+            'görünen adını yaz. En az 2 karakter gerekir.',
       );
     }
 
     if (_results.isEmpty) {
-      return const _Info(
-        icon: Icons.search_off_outlined,
-        title: 'Kimse bulunamadı',
-        message: 'Kullanıcı adının tamamını veya bir kısmını yazmayı dene. '
-            'Karşı tarafın profilinde kullanıcı adı tanımlı olmalı.',
+      return const _Hint(
+        icon: Icons.person_search_rounded,
+        title: 'Sonuç yok',
+        message: 'Bu ada uyan bir kullanıcı bulunamadı. '
+            'Yazımı kontrol et veya tam kullanıcı adını dene.',
       );
     }
 
     return ListView.separated(
-      padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+      padding: const EdgeInsets.fromLTRB(12, 4, 12, 24),
       itemCount: _results.length,
-      separatorBuilder: (_, _) => const SizedBox(height: 8),
+      separatorBuilder: (_, _) => Divider(
+        height: 1,
+        color: context.line,
+        indent: 68,
+      ),
       itemBuilder: (context, index) {
         final profile = _results[index];
-        final isBlocked = _blocked.contains(profile.uid);
-
-        return Material(
-          color: AppColors.surface,
-          borderRadius: BorderRadius.circular(16),
-          child: InkWell(
-            borderRadius: BorderRadius.circular(16),
-            onTap: isBlocked ? null : () => _startChat(profile),
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-              child: Row(
-                children: [
-                  UserAvatar(
-                    name: profile.displayName,
-                    size: 44,
-                    photoUrl: profile.photoUrl,
-                    emoji: profile.avatarEmoji,
-                    colorIndex: profile.avatarColor,
-                  ),
-                  const SizedBox(width: 14),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          profile.displayName,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                            fontSize: 15.5,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                        const SizedBox(height: 2),
-                        Text(
-                          isBlocked ? 'Engellendi' : profile.handle,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                            fontSize: 12.5,
-                            color: isBlocked
-                                ? AppColors.danger
-                                : AppColors.textSecondary,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  Icon(
-                    isBlocked ? Icons.block : Icons.chat_bubble_outline,
-                    size: 20,
-                    color: isBlocked ? AppColors.danger : AppColors.textMuted,
-                  ),
-                ],
-              ),
-            ),
+        return ListTile(
+          contentPadding: const EdgeInsets.symmetric(horizontal: 8),
+          leading: UserAvatar(
+            name: profile.displayName,
+            size: 44,
+            photoUrl: profile.photoUrl,
+            emoji: profile.avatarEmoji,
+            colorIndex: profile.avatarColor,
           ),
+          title: Text(
+            profile.displayName,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 15),
+          ),
+          subtitle: Text(
+            profile.username.isEmpty
+                ? 'kullanıcı adı yok'
+                : '@${profile.username}',
+            style: TextStyle(fontSize: 12.5, color: context.muted),
+          ),
+          trailing: Icon(
+            Icons.arrow_forward_rounded,
+            size: 18,
+            color: context.muted,
+          ),
+          onTap: () => _startChat(profile),
         );
       },
     );
   }
 }
 
-class _Info extends StatelessWidget {
-  const _Info({
+class _Hint extends StatelessWidget {
+  const _Hint({
     required this.icon,
     required this.title,
     required this.message,
@@ -299,29 +281,26 @@ class _Info extends StatelessWidget {
   Widget build(BuildContext context) {
     return Center(
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 36),
+        padding: const EdgeInsets.symmetric(horizontal: 34),
         child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
+          mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(icon, size: 34, color: AppColors.textMuted),
+            Icon(icon, size: 42, color: context.colors.primary),
             const SizedBox(height: 14),
             Text(
               title,
               textAlign: TextAlign.center,
               style: const TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.w600,
+                fontSize: 17,
+                fontWeight: FontWeight.w800,
+                letterSpacing: -0.3,
               ),
             ),
             const SizedBox(height: 8),
             Text(
               message,
               textAlign: TextAlign.center,
-              style: const TextStyle(
-                fontSize: 13.5,
-                height: 1.5,
-                color: AppColors.textSecondary,
-              ),
+              style: TextStyle(fontSize: 13.5, height: 1.5, color: context.muted),
             ),
           ],
         ),

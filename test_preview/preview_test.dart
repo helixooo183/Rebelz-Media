@@ -15,14 +15,15 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:sohbet/core/theme/app_colors.dart';
 import 'package:sohbet/core/theme/app_theme.dart';
+import 'package:sohbet/core/widgets/app_logo.dart';
 import 'package:sohbet/features/auth/presentation/login_screen.dart';
 import 'package:sohbet/features/auth/presentation/register_screen.dart';
 import 'package:sohbet/features/auth/presentation/splash_screen.dart';
 import 'package:sohbet/features/chat/data/chat_repository.dart';
 import 'package:sohbet/features/chat/domain/models/chat_message.dart';
 import 'package:sohbet/features/chat/domain/models/chat_room.dart';
+import 'package:sohbet/features/chat/presentation/channels_screen.dart';
 import 'package:sohbet/features/chat/presentation/chat_screen.dart';
 import 'package:sohbet/features/chat/presentation/new_chat_sheet.dart';
 import 'package:sohbet/features/chat/presentation/rooms_screen.dart';
@@ -36,17 +37,26 @@ import 'package:sohbet/features/setup/setup_screen.dart';
 
 /// Firebase'e dokunmayan sahte sohbet deposu.
 class _FakeChatRepository implements ChatRepository {
-  _FakeChatRepository({this.rooms = const [], this.messages = const []});
+  _FakeChatRepository({
+    this.rooms = const [],
+    this.messages = const [],
+    this.channels = const [],
+  });
 
   final List<ChatRoom> rooms;
   final List<ChatMessage> messages;
+  final List<ChatRoom> channels;
 
   @override
-  Stream<List<ChatRoom>> watchRooms() => Stream.value(rooms);
+  Stream<List<ChatRoom>> watchRooms() =>
+      Stream.value(rooms.where((room) => !room.isChannel).toList());
+
+  @override
+  Stream<List<ChatRoom>> watchChannels() => Stream.value(channels);
 
   @override
   Stream<ChatRoom?> watchRoom(String roomId) {
-    for (final room in rooms) {
+    for (final room in [...rooms, ...channels]) {
       if (room.id == roomId) return Stream.value(room);
     }
     return Stream.value(null);
@@ -65,7 +75,48 @@ class _FakeChatRepository implements ChatRepository {
       'dm_fake';
 
   @override
-  Future<void> sendMessage(String roomId, String text) async {}
+  Future<void> sendMessage(
+    String roomId, {
+    String text = '',
+    String type = MessageType.text,
+    String mediaBase64 = '',
+    String mediaMime = '',
+    int durationMs = 0,
+    ReplyInfo? reply,
+  }) async {}
+
+  @override
+  Future<void> setTyping(String roomId, bool typing) async {}
+
+  @override
+  Future<void> markRead(String roomId) async {}
+
+  @override
+  Future<void> toggleReaction(
+    String roomId,
+    String messageId,
+    String emoji,
+  ) async {}
+
+  @override
+  Future<void> deleteMessage(String roomId, String messageId) async {}
+
+  @override
+  Future<void> editMessage(
+    String roomId,
+    String messageId,
+    String text,
+  ) async {}
+
+  @override
+  Future<String> createChannel({required String name, String about = ''}) async =>
+      'kanal_fake';
+
+  @override
+  Future<void> joinChannel(String roomId) async {}
+
+  @override
+  Future<void> leaveChannel(String roomId) async {}
 
   @override
   Future<bool> hasBlocked(String otherUid) async => false;
@@ -214,8 +265,19 @@ Widget _wrap(Widget child) => MaterialApp(
       home: child,
     );
 
+Future<void> _loadBrandAssets() async {
+  // İlk golden'da logo boş görünmesin diye marka görselleri önceden okunur.
+  final mark = await rootBundle.load('assets/brand/rebelz-mark.png');
+  final wordmark = await rootBundle.load('assets/brand/rebelz-wordmark.png');
+  expect(mark.lengthInBytes, greaterThan(0));
+  expect(wordmark.lengthInBytes, greaterThan(0));
+}
+
 void main() {
-  setUpAll(_loadFonts);
+  setUpAll(() async {
+    await _loadFonts();
+    await _loadBrandAssets();
+  });
 
   setUp(() {
     // iPhone 14 benzeri mantıksal ölçüler (390 x 844), 3x yoğunluk.
@@ -225,26 +287,48 @@ void main() {
     view.devicePixelRatio = 3.0;
   });
 
+  // İlk golden'da logo görünsün: marka görsellerini ImageCache'e ısıt.
+  testWidgets('00 logo ısınma', (tester) async {
+    await tester.pumpWidget(
+      _wrap(const Center(child: RebelzLogo(height: 40))),
+    );
+    await tester.runAsync(() async {
+      final context = tester.element(find.byType(RebelzLogo));
+      await precacheImage(const AssetImage('assets/brand/rebelz-mark.png'), context);
+      await precacheImage(
+        const AssetImage('assets/brand/rebelz-wordmark.png'),
+        context,
+      );
+    });
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 50));
+  });
+
   final now = DateTime.now();
 
   final rooms = <ChatRoom>[
     ChatRoom(
       id: 'r1',
-      name: 'Tasarım Ekibi',
+      name: 'Deniz Kaya',
       createdBy: 'u1',
       memberIds: const ['u1', 'u2'],
       type: 'dm',
+      memberNames: const {'u1': 'Ayşe Yılmaz', 'u2': 'Deniz Kaya'},
       lastMessage: 'Yeni ekran akışını Figma\'ya yükledim',
+      lastSenderId: 'u2',
       lastMessageAt: DateTime(now.year, now.month, now.day, 14, 32),
     ),
     ChatRoom(
       id: 'r2',
-      name: 'Deniz',
+      name: 'Emre Demir',
       createdBy: 'u2',
-      memberIds: const ['u1', 'u2'],
+      memberIds: const ['u1', 'u3'],
       type: 'dm',
+      memberNames: const {'u1': 'Ayşe Yılmaz', 'u3': 'Emre Demir'},
       lastMessage: 'Akşam 8 gibi orada olurum.',
+      lastSenderId: 'u3',
       lastMessageAt: DateTime(now.year, now.month, now.day, 11, 5),
+      typing: {'u3': now.subtract(const Duration(seconds: 1))},
     ),
     ChatRoom(
       id: 'r3',
@@ -266,32 +350,77 @@ void main() {
 
   final messages = <ChatMessage>[
     ChatMessage(
+      id: 'm5',
+      senderId: 'u1',
+      senderName: 'Ayşe Yılmaz',
+      text: 'Süper! Yarın giriş ekranını da bitiriyorum.',
+      createdAt: now.subtract(const Duration(seconds: 40)),
+      readBy: const ['u1', 'u2'],
+    ),
+    ChatMessage(
       id: 'm4',
       senderId: 'u1',
-      senderName: 'Sen',
-      text: 'Süper! Yarın giriş ekranını da bitiriyorum.',
+      senderName: 'Ayşe Yılmaz',
+      text: 'Sesli not bırakıyorum, müsait olunca dinle.',
+      type: MessageType.audio,
+      durationMs: 12000,
       createdAt: now.subtract(const Duration(minutes: 3)),
+      readBy: const ['u1'],
     ),
     ChatMessage(
       id: 'm3',
       senderId: 'u2',
-      senderName: 'Deniz',
-      text: 'İskelet çok temiz görünüyor, koyu tema tam istediğimiz gibi.',
+      senderName: 'Deniz Kaya',
+      text: 'Kırmızı vurgu tam logo ile uyumlu olmuş. Baloncuklar da '
+          'WhatsApp gibi okunuyor.',
+      reply: const ReplyInfo(
+        id: 'm2',
+        senderName: 'Deniz Kaya',
+        preview: 'Firebase Auth + Firestore bağladınız mı?',
+      ),
+      reactions: const {'u1': '❤️', 'u3': '🔥'},
       createdAt: now.subtract(const Duration(minutes: 14)),
     ),
     ChatMessage(
       id: 'm2',
       senderId: 'u2',
-      senderName: 'Deniz',
+      senderName: 'Deniz Kaya',
       text: 'Firebase Auth + Firestore bağladınız mı?',
       createdAt: now.subtract(const Duration(minutes: 15)),
     ),
     ChatMessage(
       id: 'm1',
       senderId: 'u1',
-      senderName: 'Sen',
-      text: 'Selam! Proje iskeletini kurdum, göz atar mısın?',
+      senderName: 'Ayşe Yılmaz',
+      text: 'Selam! Rebelz Media iskeletini kurdum, göz atar mısın?',
       createdAt: now.subtract(const Duration(minutes: 42)),
+    ),
+  ];
+
+  final channels = <ChatRoom>[
+    ChatRoom(
+      id: 'c1',
+      name: 'Rebelz Duyuru',
+      createdBy: 'u1',
+      ownerUid: 'u1',
+      memberIds: const ['u1'],
+      type: 'channel',
+      about: 'Ürün güncellemeleri ve yeni özellikler',
+      subscriberCount: 128,
+      lastMessage: 'Karanlık tema artık sistemle uyumlu.',
+      lastMessageAt: now.subtract(const Duration(hours: 3)),
+    ),
+    ChatRoom(
+      id: 'c2',
+      name: 'Flutter Türkiye',
+      createdBy: 'u3',
+      ownerUid: 'u3',
+      memberIds: const ['u3'],
+      type: 'channel',
+      about: 'Haftalık Flutter bülteni',
+      subscriberCount: 964,
+      lastMessage: 'Bu hafta: Impeller ve yeni Material 3 bileşenleri.',
+      lastMessageAt: now.subtract(const Duration(days: 1)),
     ),
   ];
 
@@ -344,6 +473,7 @@ void main() {
   testWidgets('01 splash', (tester) async {
     await tester.pumpWidget(_wrap(const SplashScreen()));
     await tester.pump();
+    await tester.pump(const Duration(milliseconds: 60));
     await expectLater(
       find.byType(MaterialApp),
       matchesGoldenFile('goldens/01_splash.png'),
@@ -462,7 +592,7 @@ void main() {
     await tester.pumpWidget(
       _wrap(
         Scaffold(
-          backgroundColor: AppColors.background,
+          backgroundColor: AppTheme.dark.scaffoldBackgroundColor,
           body: Align(
             alignment: Alignment.bottomCenter,
             child: NewChatSheet(repository: users),
@@ -504,6 +634,38 @@ void main() {
   });
 
   final blocking = _FakeUserRepository(me: me, blocked: const {'u2'});
+
+  testWidgets('15 kanallar', (tester) async {
+    await tester.pumpWidget(
+      _wrap(
+        ChannelsScreen(
+          repository: _FakeChatRepository(rooms: rooms, channels: channels),
+          myUid: 'u1',
+        ),
+      ),
+    );
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 50));
+    await expectLater(
+      find.byType(MaterialApp),
+      matchesGoldenFile('goldens/15_channels.png'),
+    );
+  });
+
+  testWidgets('16 giriş — açık tema', (tester) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        debugShowCheckedModeBanner: false,
+        theme: AppTheme.light,
+        home: const LoginScreen(),
+      ),
+    );
+    await tester.pump();
+    await expectLater(
+      find.byType(MaterialApp),
+      matchesGoldenFile('goldens/16_login_light.png'),
+    );
+  });
 
   testWidgets('13 sohbet — engellenen kişi', (tester) async {
     await tester.pumpWidget(

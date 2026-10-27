@@ -2,8 +2,9 @@ import 'package:flutter/material.dart';
 
 import '../../../core/services/services.dart';
 import '../../../core/theme/app_colors.dart';
+import '../../../core/widgets/app_card.dart';
 import '../../../core/widgets/app_text_field.dart';
-import '../../../core/widgets/gradient_button.dart';
+import '../../../core/widgets/primary_button.dart';
 import '../../../core/widgets/user_avatar.dart';
 import '../data/user_repository.dart';
 import '../domain/user_profile.dart';
@@ -123,7 +124,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     return Scaffold(
       appBar: AppBar(title: const Text('Profili düzenle')),
       body: ListView(
-        padding: const EdgeInsets.fromLTRB(20, 12, 20, 40),
+        padding: const EdgeInsets.fromLTRB(20, 10, 20, 44),
         children: [
           Center(
             child: UserAvatar(
@@ -135,23 +136,25 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
               highlighted: true,
             ),
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: 12),
           Center(
             child: Text(
               preview.handle,
-              style: const TextStyle(
+              style: TextStyle(
                 fontSize: 13,
-                color: AppColors.textSecondary,
+                fontWeight: FontWeight.w600,
+                color: context.colors.primary,
               ),
             ),
           ),
-          const SizedBox(height: 24),
+          const SizedBox(height: 26),
           AppTextField(
             controller: _nameController,
             hintText: 'Adın Soyadın',
             labelText: 'Görünen ad',
-            prefixIcon: Icons.person_outline,
+            prefixIcon: Icons.person_outline_rounded,
             maxLines: 1,
+            textCapitalization: TextCapitalization.words,
             onSubmitted: (_) => _save(),
           ),
           const SizedBox(height: 16),
@@ -159,29 +162,24 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
             controller: _usernameController,
             hintText: 'ör. ayse_y',
             labelText: 'Kullanıcı adı (@ ile aranır)',
-            prefixIcon: Icons.alternate_email,
+            prefixIcon: Icons.alternate_email_rounded,
             maxLines: 1,
           ),
-          const SizedBox(height: 4),
-          const Padding(
-            padding: EdgeInsets.only(left: 4),
-            child: Text(
-              '3-20 karakter • küçük harf, rakam, alt çizgi. '
-              'Başkaları seni bu adla bulur.',
-              style: TextStyle(fontSize: 12, color: AppColors.textMuted),
-            ),
+          const SizedBox(height: 6),
+          const _Hint(
+            '3-20 karakter • küçük harf, rakam, alt çizgi. '
+            'Başkaları seni bu adla bulur.',
           ),
           const SizedBox(height: 16),
           AppTextField(
             controller: _bioController,
             hintText: 'Kendinden kısa bir not (isteğe bağlı)',
             labelText: 'Hakkında',
-            prefixIcon: Icons.notes_outlined,
+            prefixIcon: Icons.notes_rounded,
             maxLines: 3,
           ),
           const SizedBox(height: 24),
-          const _SectionLabel('Avatar'),
-          const SizedBox(height: 10),
+          const SectionHeader(title: 'Avatar'),
           Wrap(
             spacing: 8,
             runSpacing: 8,
@@ -199,13 +197,14 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
           const SizedBox(height: 16),
           Wrap(
             spacing: 12,
+            runSpacing: 12,
             children: [
               for (var i = 0; i < AvatarPalette.gradients.length; i++)
                 GestureDetector(
                   onTap: () => setState(() => _colorIndex = i),
                   child: Container(
-                    height: 34,
-                    width: 34,
+                    height: 36,
+                    width: 36,
                     decoration: BoxDecoration(
                       shape: BoxShape.circle,
                       gradient: LinearGradient(
@@ -215,11 +214,14 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                       ),
                       border: Border.all(
                         color: _colorIndex == i
-                            ? Colors.white
+                            ? context.colors.onSurface
                             : Colors.transparent,
                         width: 2,
                       ),
                     ),
+                    child: _colorIndex == i
+                        ? const Icon(Icons.check, size: 16, color: Colors.white)
+                        : null,
                   ),
                 ),
             ],
@@ -233,39 +235,32 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
             keyboardType: TextInputType.url,
             maxLines: 1,
           ),
-          const SizedBox(height: 4),
-          const Padding(
-            padding: EdgeInsets.only(left: 4),
-            child: Text(
-              'Fotoğraf bağlantısı varsa avatar yerine o gösterilir. '
-              'Boş bırakırsan seçtiğin emoji ve renk kullanılır.',
-              style: TextStyle(fontSize: 12, color: AppColors.textMuted),
-            ),
+          const SizedBox(height: 6),
+          const _Hint(
+            'Fotoğraf bağlantısı varsa avatar yerine o gösterilir. '
+            'Boş bırakırsan seçtiğin emoji ve renk kullanılır.',
           ),
           if (_error != null) ...[
             const SizedBox(height: 16),
             Container(
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
-                color: AppColors.danger.withValues(alpha: 0.12),
+                color: context.colors.error.withValues(alpha: 0.12),
                 borderRadius: BorderRadius.circular(12),
                 border: Border.all(
-                  color: AppColors.danger.withValues(alpha: 0.4),
+                  color: context.colors.error.withValues(alpha: 0.4),
                 ),
               ),
               child: Text(
                 _error!,
-                style: const TextStyle(
-                  fontSize: 13,
-                  color: AppColors.danger,
-                ),
+                style: TextStyle(fontSize: 13, color: context.colors.error),
               ),
             ),
           ],
           const SizedBox(height: 28),
-          GradientButton(
+          PrimaryButton(
             label: 'Kaydet',
-            icon: Icons.check,
+            icon: Icons.check_rounded,
             isLoading: _isSaving,
             onPressed: _save,
           ),
@@ -275,19 +270,18 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   }
 }
 
-class _SectionLabel extends StatelessWidget {
-  const _SectionLabel(this.text);
+class _Hint extends StatelessWidget {
+  const _Hint(this.text);
 
   final String text;
 
   @override
   Widget build(BuildContext context) {
-    return Text(
-      text,
-      style: const TextStyle(
-        fontSize: 13,
-        fontWeight: FontWeight.w600,
-        color: AppColors.textMuted,
+    return Padding(
+      padding: const EdgeInsets.only(left: 4),
+      child: Text(
+        text,
+        style: TextStyle(fontSize: 12, height: 1.4, color: context.muted),
       ),
     );
   }
@@ -309,14 +303,14 @@ class _EmojiChip extends StatelessWidget {
     return GestureDetector(
       onTap: onTap,
       child: Container(
-        height: 42,
-        width: 42,
+        height: 44,
+        width: 44,
         alignment: Alignment.center,
         decoration: BoxDecoration(
-          color: selected ? AppColors.primarySoft : AppColors.surface,
-          borderRadius: BorderRadius.circular(12),
+          color: selected ? context.colors.primaryContainer : context.card,
+          borderRadius: BorderRadius.circular(14),
           border: Border.all(
-            color: selected ? AppColors.primary : AppColors.outline,
+            color: selected ? context.colors.primary : context.line,
             width: selected ? 1.6 : 1,
           ),
         ),

@@ -5,6 +5,7 @@ import 'package:intl/intl.dart';
 import '../../../core/router/app_router.dart';
 import '../../../core/services/services.dart';
 import '../../../core/theme/app_colors.dart';
+import '../../../core/widgets/app_card.dart';
 import '../../../core/widgets/empty_state.dart';
 import '../../../core/widgets/user_avatar.dart';
 import '../../../core/widgets/verify_email_banner.dart';
@@ -16,8 +17,7 @@ import '../data/chat_repository.dart';
 import '../domain/models/chat_room.dart';
 import 'new_chat_sheet.dart';
 
-/// Sohbet listesi: kullanıcı adıyla yeni sohbet, sohbet silme, engelleme
-/// ve e-posta/koşul hatırlatmaları.
+/// Sohbet listesi — Threads'in sade akışı + WhatsApp'ın okunmamış düzeni.
 class RoomsScreen extends StatefulWidget {
   const RoomsScreen({
     super.key,
@@ -27,8 +27,6 @@ class RoomsScreen extends StatefulWidget {
     this.myUid,
   });
 
-  /// Test/önizleme için enjekte edilebilir bağımlılıklar.
-  /// null ise global servis kaydı kullanılır.
   final ChatRepository? repository;
   final UserRepository? userRepository;
   final String? currentUserName;
@@ -42,7 +40,6 @@ class _RoomsScreenState extends State<RoomsScreen> {
   late final ChatRepository _repository =
       widget.repository ?? chatRepositoryInstance;
 
-  /// Firebase başlatılmamış (önizleme/test) ortamda `null` döner.
   late final UserRepository? _users = _resolveUsers();
 
   late final String _currentUserName =
@@ -54,6 +51,7 @@ class _RoomsScreenState extends State<RoomsScreen> {
 
   Stream<UserProfile?>? _profileStream;
   bool _termsPromptShown = false;
+  String _filter = 'all';
 
   UserRepository? _resolveUsers() {
     if (widget.userRepository != null) return widget.userRepository;
@@ -79,18 +77,20 @@ class _RoomsScreenState extends State<RoomsScreen> {
     context.push(AppRoutes.chat(roomId, name: 'Sohbet'));
   }
 
+  Future<void> _openChat(ChatRoom room) async {
+    await context.push(
+      AppRoutes.chat(room.id, name: room.peerName(_myUid)),
+    );
+  }
+
   Future<void> _deleteChat(ChatRoom room) async {
     final choice = await showModalBottomSheet<String>(
       context: context,
-      backgroundColor: AppColors.surface,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(22)),
-      ),
       builder: (sheetContext) => SafeArea(
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const SizedBox(height: 12),
+            const SizedBox(height: 6),
             ListTile(
               leading: const Icon(Icons.visibility_off_outlined),
               title: const Text('Sadece benden kaldır'),
@@ -98,12 +98,12 @@ class _RoomsScreenState extends State<RoomsScreen> {
               onTap: () => Navigator.pop(sheetContext, 'hide'),
             ),
             ListTile(
-              leading: const Icon(Icons.delete_outline, color: AppColors.danger),
+              leading: Icon(Icons.delete_outline, color: sheetContext.colors.error),
               title: const Text('Sohbeti tamamen sil'),
               subtitle: const Text('Tüm mesajlar iki taraftan da silinir.'),
               onTap: () => Navigator.pop(sheetContext, 'delete'),
             ),
-            const SizedBox(height: 8),
+            const SizedBox(height: 10),
           ],
         ),
       ),
@@ -115,10 +115,6 @@ class _RoomsScreenState extends State<RoomsScreen> {
       final confirmed = await showDialog<bool>(
         context: context,
         builder: (dialogContext) => AlertDialog(
-          backgroundColor: AppColors.surface,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(20),
-          ),
           title: const Text('Sohbet silinsin mi?'),
           content: const Text(
             'Bu sohbet ve içindeki tüm mesajlar kalıcı olarak silinir. '
@@ -131,7 +127,6 @@ class _RoomsScreenState extends State<RoomsScreen> {
             ),
             FilledButton(
               onPressed: () => Navigator.pop(dialogContext, true),
-              style: FilledButton.styleFrom(backgroundColor: AppColors.danger),
               child: const Text('Sil'),
             ),
           ],
@@ -150,7 +145,9 @@ class _RoomsScreenState extends State<RoomsScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            choice == 'delete' ? 'Sohbet silindi.' : 'Sohbet listeden kaldırıldı.',
+            choice == 'delete'
+                ? 'Sohbet silindi.'
+                : 'Sohbet listeden kaldırıldı.',
           ),
         ),
       );
@@ -162,13 +159,10 @@ class _RoomsScreenState extends State<RoomsScreen> {
     }
   }
 
-  /// Kullanıcı adı yoksa profili düzenlemeye yönlendir.
   Future<void> _promptUsername(UserProfile profile) async {
     final go = await showDialog<bool>(
       context: context,
       builder: (dialogContext) => AlertDialog(
-        backgroundColor: AppColors.surface,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
         title: const Text('Kullanıcı adı seç'),
         content: const Text(
           'Başkaları seni bulabilsin diye bir kullanıcı adı belirle '
@@ -195,10 +189,6 @@ class _RoomsScreenState extends State<RoomsScreen> {
     }
   }
 
-  /// Koşullar kabul edilmemişse (ör. Google ile giriş) onay iste.
-  ///
-  /// Ekran başına bir kez sorulur; kullanıcı reddederse sohbet özellikleri
-  /// kullanılamaz ve uygulama yeniden açıldığında tekrar sorulur.
   Future<void> _promptTerms(UserProfile profile) async {
     var accepted = false;
     final result = await showDialog<bool>(
@@ -206,10 +196,6 @@ class _RoomsScreenState extends State<RoomsScreen> {
       barrierDismissible: false,
       builder: (dialogContext) => StatefulBuilder(
         builder: (context, setDialogState) => AlertDialog(
-          backgroundColor: AppColors.surface,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(20),
-          ),
           title: const Text('Kullanım koşulları'),
           content: SingleChildScrollView(
             child: Column(
@@ -257,9 +243,7 @@ class _RoomsScreenState extends State<RoomsScreen> {
     } else if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text(
-            'Koşulları kabul etmeden sohbet özelliklerini kullanamazsın.',
-          ),
+          content: Text('Koşulları kabul etmeden sohbetleri kullanamazsın.'),
         ),
       );
     }
@@ -273,10 +257,7 @@ class _RoomsScreenState extends State<RoomsScreen> {
         final profile = profileSnapshot.data;
         final displayName = profile?.displayName ?? _currentUserName;
 
-        // Koşullar kabul edilmemişse bir kez sor.
         if (profile != null && !profile.termsAccepted && !_termsPromptShown) {
-          // Bayrak build sırasında işaretlenir ki tekrar tekrar diyalog
-          // açılmasın (diyalog ilk kare çizildikten sonra açılır).
           _termsPromptShown = true;
           WidgetsBinding.instance.addPostFrameCallback((_) {
             if (mounted) _promptTerms(profile);
@@ -284,86 +265,202 @@ class _RoomsScreenState extends State<RoomsScreen> {
         }
 
         return Scaffold(
-          appBar: AppBar(
-            title: const Text('Sohbetler'),
-            actions: [
-              IconButton(
-                tooltip: 'Profil',
-                onPressed: () => context.go(AppRoutes.profile),
-                icon: UserAvatar(
+          body: SafeArea(
+            bottom: false,
+            child: Column(
+              children: [
+                _Header(
                   name: displayName,
-                  size: 34,
-                  highlighted: true,
                   photoUrl: profile?.photoUrl,
                   emoji: profile?.avatarEmoji,
                   colorIndex: profile?.avatarColor ?? 0,
+                  onProfile: () => context.go(AppRoutes.profile),
+                  onSearch: _openNewChat,
                 ),
-              ),
-              const SizedBox(width: 8),
-            ],
-          ),
-          floatingActionButton: FloatingActionButton.extended(
-            onPressed: _openNewChat,
-            backgroundColor: AppColors.primary,
-            foregroundColor: Colors.white,
-            icon: const Icon(Icons.person_add_alt_1_outlined),
-            label: const Text('Yeni sohbet'),
-          ),
-          body: Column(
-            children: [
-              const VerifyEmailBanner(),
-              if (profile != null && profile.username.isEmpty)
-                _UsernamePrompt(onTap: () => _promptUsername(profile)),
-              Expanded(
-                child: StreamBuilder<List<ChatRoom>>(
-                  stream: _roomsStream,
-                  builder: (context, snapshot) {
-                    if (snapshot.hasError) {
-                      return EmptyState(
-                        icon: Icons.cloud_off_outlined,
-                        title: 'Sohbetler yüklenemedi',
-                        message: '${snapshot.error}',
-                      );
-                    }
-
-                    if (!snapshot.hasData) {
-                      return const Center(child: CircularProgressIndicator());
-                    }
-
-                    final rooms = snapshot.data!;
-                    if (rooms.isEmpty) {
-                      return const EmptyState(
-                        icon: Icons.forum_outlined,
-                        title: 'Henüz sohbet yok',
-                        message:
-                            'Sağ alttaki "Yeni sohbet" butonuyla bir kullanıcı '
-                            'adı ara ve sohbeti başlat.',
-                      );
-                    }
-
-                    return ListView.separated(
-                      padding: const EdgeInsets.fromLTRB(16, 8, 16, 96),
-                      itemCount: rooms.length,
-                      separatorBuilder: (_, _) => const SizedBox(height: 10),
-                      itemBuilder: (context, index) {
-                        final room = rooms[index];
-                        return _RoomTile(
-                          room: room,
-                          onTap: () => context.push(
-                            AppRoutes.chat(room.id, name: room.name),
-                          ),
-                          onLongPress: () => _deleteChat(room),
-                          onMenu: () => _deleteChat(room),
+                const VerifyEmailBanner(),
+                if (profile != null && profile.username.isEmpty)
+                  _UsernamePrompt(onTap: () => _promptUsername(profile)),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 6, 16, 10),
+                  child: Row(
+                    children: [
+                      _FilterPill(
+                        label: 'Tümü',
+                        selected: _filter == 'all',
+                        onTap: () => setState(() => _filter = 'all'),
+                      ),
+                      const SizedBox(width: 8),
+                      _FilterPill(
+                        label: 'Kişiler',
+                        selected: _filter == 'dm',
+                        onTap: () => setState(() => _filter = 'dm'),
+                      ),
+                      const SizedBox(width: 8),
+                      _FilterPill(
+                        label: 'Gruplar',
+                        selected: _filter == 'group',
+                        onTap: () => setState(() => _filter = 'group'),
+                      ),
+                    ],
+                  ),
+                ),
+                Expanded(
+                  child: StreamBuilder<List<ChatRoom>>(
+                    stream: _roomsStream,
+                    builder: (context, snapshot) {
+                      if (snapshot.hasError) {
+                        return EmptyState(
+                          icon: Icons.cloud_off_rounded,
+                          title: 'Sohbetler yüklenemedi',
+                          message: '${snapshot.error}',
                         );
-                      },
-                    );
-                  },
+                      }
+
+                      if (!snapshot.hasData) {
+                        return const Center(child: CircularProgressIndicator());
+                      }
+
+                      final rooms = snapshot.data!.where((room) {
+                        if (_filter == 'dm') return room.isDirect;
+                        if (_filter == 'group') return room.isGroup;
+                        return true;
+                      }).toList();
+
+                      if (rooms.isEmpty) {
+                        return EmptyState(
+                          icon: Icons.forum_outlined,
+                          title: 'Henüz sohbet yok',
+                          message:
+                              'Kullanıcı adıyla ara ve ilk sohbetini başlat. '
+                              'Kanallar sekmesinden topluluklara da katılabilirsin.',
+                          actionLabel: 'Sohbet başlat',
+                          onAction: _openNewChat,
+                        );
+                      }
+
+                      return ListView.separated(
+                        padding: const EdgeInsets.fromLTRB(16, 4, 16, 110),
+                        itemCount: rooms.length,
+                        separatorBuilder: (_, _) => const SizedBox(height: 8),
+                        itemBuilder: (context, index) {
+                          final room = rooms[index];
+                          return _RoomTile(
+                            room: room,
+                            myUid: _myUid,
+                            onTap: () => _openChat(room),
+                            onLongPress: () => _deleteChat(room),
+                          );
+                        },
+                      );
+                    },
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
+          ),
+          floatingActionButton: FloatingActionButton(
+            onPressed: _openNewChat,
+            backgroundColor: AppColors.brand,
+            foregroundColor: Colors.white,
+            elevation: 6,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(20),
+            ),
+            child: const Icon(Icons.edit_outlined, size: 24),
           ),
         );
       },
+    );
+  }
+}
+
+class _Header extends StatelessWidget {
+  const _Header({
+    required this.name,
+    required this.onProfile,
+    required this.onSearch,
+    this.photoUrl,
+    this.emoji,
+    this.colorIndex = 0,
+  });
+
+  final String name;
+  final String? photoUrl;
+  final String? emoji;
+  final int colorIndex;
+  final VoidCallback onProfile;
+  final VoidCallback onSearch;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(18, 14, 12, 6),
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(
+              'Sohbetler',
+              style: context.texts.displaySmall,
+            ),
+          ),
+          IconButton(
+            tooltip: 'Yeni sohbet',
+            onPressed: onSearch,
+            icon: const Icon(Icons.search_rounded, size: 24),
+          ),
+          const SizedBox(width: 2),
+          GestureDetector(
+            onTap: onProfile,
+            child: UserAvatar(
+              name: name,
+              size: 38,
+              photoUrl: photoUrl,
+              emoji: emoji,
+              colorIndex: colorIndex,
+              highlighted: true,
+            ),
+          ),
+          const SizedBox(width: 6),
+        ],
+      ),
+    );
+  }
+}
+
+class _FilterPill extends StatelessWidget {
+  const _FilterPill({
+    required this.label,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 160),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
+        decoration: BoxDecoration(
+          color: selected ? context.colors.onSurface : Colors.transparent,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(
+            color: selected ? Colors.transparent : context.line,
+          ),
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            fontSize: 13,
+            fontWeight: FontWeight.w600,
+            color: selected ? context.colors.surface : context.muted,
+          ),
+        ),
+      ),
     );
   }
 }
@@ -375,21 +472,17 @@ class _UsernamePrompt extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
+    return AppCard(
       margin: const EdgeInsets.fromLTRB(16, 8, 16, 4),
       padding: const EdgeInsets.fromLTRB(14, 10, 8, 10),
-      decoration: BoxDecoration(
-        color: AppColors.surface,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: AppColors.outline),
-      ),
+      radius: 16,
       child: Row(
         children: [
-          const Icon(Icons.alternate_email, size: 20, color: AppColors.secondary),
+          Icon(Icons.alternate_email_rounded, size: 20, color: context.colors.primary),
           const SizedBox(width: 10),
           const Expanded(
             child: Text(
-              'Henüz kullanıcı adın yok. Ekleyince başkaları seni bulabilir.',
+              'Kullanıcı adın yok. Ekleyince başkaları seni bulabilir.',
               style: TextStyle(fontSize: 12.5, height: 1.4),
             ),
           ),
@@ -403,95 +496,127 @@ class _UsernamePrompt extends StatelessWidget {
 class _RoomTile extends StatelessWidget {
   const _RoomTile({
     required this.room,
+    required this.myUid,
     required this.onTap,
     required this.onLongPress,
-    required this.onMenu,
   });
 
   final ChatRoom room;
+  final String? myUid;
   final VoidCallback onTap;
   final VoidCallback onLongPress;
-  final VoidCallback onMenu;
 
   @override
   Widget build(BuildContext context) {
-    return Material(
-      color: AppColors.surface,
-      borderRadius: BorderRadius.circular(18),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(18),
-        onTap: onTap,
-        onLongPress: onLongPress,
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(14, 14, 6, 14),
-          child: Row(
-            children: [
-              UserAvatar(
-                name: room.name,
-                size: 46,
-                photoUrl: room.photoUrl,
-              ),
-              const SizedBox(width: 14),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+    final name = room.isDirect ? room.peerName(myUid) : room.name;
+    final photo = room.isDirect ? room.peerPhoto(myUid) : room.photoUrl;
+    final isMineLast = room.lastSenderId == myUid;
+    final typing = room.isPeerTyping(myUid);
+    final unread = !isMineLast && room.lastSenderId.isNotEmpty;
+
+    return AppCard(
+      onTap: onTap,
+      onLongPress: onLongPress,
+      radius: 18,
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
+      child: Row(
+        children: [
+          UserAvatar(
+            name: name,
+            size: 50,
+            photoUrl: photo,
+            isGroup: room.isGroup,
+            colorIndex: _colorIndexFor(name),
+          ),
+          const SizedBox(width: 13),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
                   children: [
-                    Row(
-                      children: [
-                        Expanded(
-                          child: Text(
-                            room.name,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(
-                              fontSize: 15.5,
-                              fontWeight: FontWeight.w600,
-                              color: AppColors.textPrimary,
-                            ),
-                          ),
+                    Expanded(
+                      child: Text(
+                        name,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontSize: 15.5,
+                          fontWeight:
+                              unread ? FontWeight.w800 : FontWeight.w600,
+                          letterSpacing: -0.2,
                         ),
-                        Text(
-                          _formatTime(room.lastMessageAt),
-                          style: const TextStyle(
-                            fontSize: 11.5,
-                            color: AppColors.textMuted,
-                          ),
-                        ),
-                      ],
+                      ),
                     ),
-                    const SizedBox(height: 4),
                     Text(
-                      room.preview,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        fontSize: 13,
-                        color: AppColors.textSecondary,
+                      _formatTime(room.lastMessageAt),
+                      style: TextStyle(
+                        fontSize: 11.5,
+                        fontWeight: unread ? FontWeight.w700 : FontWeight.w500,
+                        color: unread
+                            ? context.colors.primary
+                            : context.colors.onSurfaceVariant,
                       ),
                     ),
                   ],
                 ),
-              ),
-              PopupMenuButton<String>(
-                tooltip: 'Sohbet seçenekleri',
-                icon: const Icon(
-                  Icons.more_vert,
-                  size: 20,
-                  color: AppColors.textMuted,
+                const SizedBox(height: 3),
+                Row(
+                  children: [
+                    if (isMineLast) ...[
+                      Icon(
+                        room.isReadByPeer(myUid, room.lastMessageAt)
+                            ? Icons.done_all_rounded
+                            : Icons.done_rounded,
+                        size: 15,
+                        color: room.isReadByPeer(myUid, room.lastMessageAt)
+                            ? context.colors.primary
+                            : context.muted,
+                      ),
+                      const SizedBox(width: 4),
+                    ],
+                    Expanded(
+                      child: Text(
+                        typing ? 'yazıyor…' : room.preview,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontSize: 13,
+                          fontStyle:
+                              typing ? FontStyle.italic : FontStyle.normal,
+                          color: typing
+                              ? context.colors.primary
+                              : context.muted,
+                        ),
+                      ),
+                    ),
+                    if (unread)
+                      Container(
+                        margin: const EdgeInsets.only(left: 8),
+                        height: 8,
+                        width: 8,
+                        decoration: BoxDecoration(
+                          color: context.colors.primary,
+                          shape: BoxShape.circle,
+                        ),
+                      ),
+                  ],
                 ),
-                onSelected: (_) => onMenu(),
-                itemBuilder: (_) => const [
-                  PopupMenuItem(
-                    value: 'delete',
-                    child: Text('Sohbeti sil'),
-                  ),
-                ],
-              ),
-            ],
+              ],
+            ),
           ),
-        ),
+        ],
       ),
     );
+  }
+
+  int _colorIndexFor(String name) {
+    if (name.trim().isEmpty) return 0;
+    var hash = 0;
+    for (final rune in name.trim().runes) {
+      hash = (hash * 31 + rune) & 0x7fffffff;
+    }
+    return hash % AvatarPalette.gradients.length;
   }
 
   String _formatTime(DateTime? date) {
@@ -499,8 +624,11 @@ class _RoomTile extends StatelessWidget {
     final now = DateTime.now();
     final isToday =
         date.year == now.year && date.month == now.month && date.day == now.day;
-    return isToday
-        ? DateFormat('HH:mm').format(date)
-        : DateFormat('dd.MM').format(date);
+    if (isToday) return DateFormat('HH:mm').format(date);
+    if (now.difference(date).inDays < 7) {
+      const days = ['Pzt', 'Sal', 'Çar', 'Per', 'Cum', 'Cmt', 'Paz'];
+      return days[date.weekday - 1];
+    }
+    return DateFormat('dd.MM').format(date);
   }
 }

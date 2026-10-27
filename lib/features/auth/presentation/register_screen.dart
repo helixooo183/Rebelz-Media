@@ -7,8 +7,8 @@ import '../../../core/services/services.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/widgets/app_text_field.dart';
 import '../../../core/widgets/google_sign_in_button.dart';
-import '../../../core/widgets/gradient_button.dart';
 import '../../../core/widgets/or_divider.dart';
+import '../../../core/widgets/primary_button.dart';
 import '../../profile/presentation/terms_sheet.dart';
 import 'auth_scaffold.dart';
 
@@ -31,22 +31,20 @@ class _RegisterScreenState extends State<RegisterScreen> {
   /// Koşulların açıkça kabul edildiğini gösterir (kanıt kaydı için şart).
   bool _acceptedTerms = false;
 
-  /// Kayıt sonrası Firestore'a onay yazar; başarısız olsa da akış sürer
-  /// (uygulama açılışında onay eksikse tekrar sorulur).
-  Future<void> _recordTerms() async {
-    try {
-      await userRepositoryInstance.acceptTerms();
-    } catch (_) {
-      // Sessiz geç: onay, sohbetler ekranındaki hatırlatmayla tamamlanır.
-    }
-  }
-
   @override
   void dispose() {
     _nameController.dispose();
     _emailController.dispose();
     _passwordController.dispose();
     super.dispose();
+  }
+
+  Future<void> _recordTerms() async {
+    try {
+      await userRepositoryInstance.acceptTerms();
+    } catch (_) {
+      // Onay, ana ekrandaki hatırlatmayla tamamlanır.
+    }
   }
 
   Future<void> _submit() async {
@@ -101,9 +99,24 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final isBusy = _isLoading || _isGoogleLoading;
+
     return AuthScaffold(
       title: 'Hesap oluştur',
-      subtitle: 'Birkaç saniyede kaydol ve sohbetlere katıl.',
+      subtitle: 'Saniyeler içinde katıl; kullanıcı adını seç, çevreni kur.',
+      footer: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Text(
+            'Zaten hesabın var mı?',
+            style: TextStyle(color: context.muted, fontSize: 14),
+          ),
+          TextButton(
+            onPressed: isBusy ? null : () => context.go(AppRoutes.login),
+            child: const Text('Giriş yap'),
+          ),
+        ],
+      ),
       children: [
         GoogleSignInButton(
           onPressed: _acceptedTerms ? _googleSignIn : null,
@@ -111,7 +124,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
           isLoading: _isGoogleLoading,
         ),
         const SizedBox(height: 20),
-        const OrDivider(),
+        const OrDivider(label: 'veya e-posta ile'),
         const SizedBox(height: 20),
         Form(
           key: _formKey,
@@ -121,13 +134,14 @@ class _RegisterScreenState extends State<RegisterScreen> {
                 controller: _nameController,
                 hintText: 'Adın Soyadın',
                 labelText: 'Görünen ad',
-                prefixIcon: Icons.person_outline,
+                prefixIcon: Icons.person_outline_rounded,
                 textInputAction: TextInputAction.next,
+                textCapitalization: TextCapitalization.words,
                 autofillHints: const [AutofillHints.name],
-                enabled: !_isLoading && !_isGoogleLoading,
+                enabled: !isBusy,
                 validator: (value) {
                   if ((value ?? '').trim().length < 2) {
-                    return 'En az 2 karakterlik bir ad girin.';
+                    return 'En az 2 karakterlik bir ad gir.';
                   }
                   return null;
                 },
@@ -137,15 +151,15 @@ class _RegisterScreenState extends State<RegisterScreen> {
                 controller: _emailController,
                 hintText: 'ornek@mail.com',
                 labelText: 'E-posta',
-                prefixIcon: Icons.alternate_email,
+                prefixIcon: Icons.alternate_email_rounded,
                 keyboardType: TextInputType.emailAddress,
                 textInputAction: TextInputAction.next,
                 autofillHints: const [AutofillHints.email],
-                enabled: !_isLoading && !_isGoogleLoading,
+                enabled: !isBusy,
                 validator: (value) {
                   final text = value?.trim() ?? '';
                   if (text.isEmpty) return 'E-posta gerekli.';
-                  if (!text.contains('@')) return 'Geçerli bir e-posta girin.';
+                  if (!text.contains('@')) return 'Geçerli bir e-posta gir.';
                   return null;
                 },
               ),
@@ -154,12 +168,12 @@ class _RegisterScreenState extends State<RegisterScreen> {
                 controller: _passwordController,
                 hintText: 'En az 6 karakter',
                 labelText: 'Şifre',
-                prefixIcon: Icons.lock_outline,
+                prefixIcon: Icons.lock_outline_rounded,
                 obscureText: true,
                 textInputAction: TextInputAction.done,
                 autofillHints: const [AutofillHints.newPassword],
                 onSubmitted: (_) => _submit(),
-                enabled: !_isLoading && !_isGoogleLoading,
+                enabled: !isBusy,
                 validator: (value) {
                   if ((value ?? '').length < 6) {
                     return 'Şifre en az 6 karakter olmalı.';
@@ -170,43 +184,27 @@ class _RegisterScreenState extends State<RegisterScreen> {
               const SizedBox(height: 18),
               TermsCheckbox(
                 value: _acceptedTerms,
-                enabled: !_isLoading && !_isGoogleLoading,
+                enabled: !isBusy,
                 onChanged: (value) => setState(() => _acceptedTerms = value),
               ),
-              const SizedBox(height: 10),
-              const Text(
+              const SizedBox(height: 12),
+              Text(
                 'Kayıttan sonra doğrulama bağlantısı e-postana gönderilir. '
                 'Gelmezse spam/gereksiz klasörünü kontrol et.',
                 style: TextStyle(
                   fontSize: 12,
                   height: 1.4,
-                  color: AppColors.textMuted,
+                  color: context.muted,
                 ),
               ),
-              const SizedBox(height: 20),
-              GradientButton(
+              const SizedBox(height: 18),
+              PrimaryButton(
                 label: 'Kayıt ol',
                 isLoading: _isLoading,
-                onPressed: _isGoogleLoading || !_acceptedTerms ? null : _submit,
+                onPressed: isBusy || !_acceptedTerms ? null : _submit,
               ),
             ],
           ),
-        ),
-        const SizedBox(height: 20),
-        Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            const Text(
-              'Zaten hesabın var mı?',
-              style: TextStyle(color: AppColors.textSecondary, fontSize: 14),
-            ),
-            TextButton(
-              onPressed: (_isLoading || _isGoogleLoading)
-                  ? null
-                  : () => context.go(AppRoutes.login),
-              child: const Text('Giriş yap'),
-            ),
-          ],
         ),
       ],
     );

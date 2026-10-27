@@ -33,12 +33,21 @@ class SetupScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       body: DecoratedBox(
-        decoration: const BoxDecoration(gradient: AppColors.backgroundGlow),
+        decoration: BoxDecoration(
+          gradient: RadialGradient(
+            center: const Alignment(0, -0.6),
+            radius: 1.1,
+            colors: [
+              AppColors.brand.withValues(alpha: 0.16),
+              Theme.of(context).scaffoldBackgroundColor,
+            ],
+          ),
+        ),
         child: SafeArea(
           child: ListView(
             padding: const EdgeInsets.fromLTRB(24, 40, 24, 40),
             children: [
-              const Center(child: AppLogo(size: 64)),
+              const Center(child: RebelzLogo(height: 44)),
               const SizedBox(height: 26),
               Text(
                 'Firebase yapılandırılmadı',
@@ -46,14 +55,14 @@ class SetupScreen extends StatelessWidget {
                 style: Theme.of(context).textTheme.headlineSmall,
               ),
               const SizedBox(height: 10),
-              const Text(
+              Text(
                 'Kod tarafı hazır: Google Sign-In, e-posta/şifre ve Firestore '
                 'akışları bağlı. Eksik olan tek şey proje anahtarları.',
                 textAlign: TextAlign.center,
                 style: TextStyle(
                   fontSize: 14,
                   height: 1.55,
-                  color: AppColors.textSecondary,
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
                 ),
               ),
               const SizedBox(height: 28),
@@ -61,9 +70,11 @@ class SetupScreen extends StatelessWidget {
                 Container(
                   padding: const EdgeInsets.all(16),
                   decoration: BoxDecoration(
-                    color: AppColors.surface,
-                    borderRadius: BorderRadius.circular(16),
-                    border: Border.all(color: AppColors.outline),
+                    color: Theme.of(context).colorScheme.surface,
+                    borderRadius: BorderRadius.circular(18),
+                    border: Border.all(
+                      color: Theme.of(context).colorScheme.outlineVariant,
+                    ),
                   ),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -72,17 +83,16 @@ class SetupScreen extends StatelessWidget {
                         title,
                         style: const TextStyle(
                           fontSize: 15,
-                          fontWeight: FontWeight.w600,
-                          color: AppColors.textPrimary,
+                          fontWeight: FontWeight.w700,
                         ),
                       ),
                       const SizedBox(height: 6),
                       Text(
                         description,
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontSize: 13,
                           height: 1.55,
-                          color: AppColors.textSecondary,
+                          color: Theme.of(context).colorScheme.onSurfaceVariant,
                         ),
                       ),
                     ],
@@ -91,10 +101,13 @@ class SetupScreen extends StatelessWidget {
                 const SizedBox(height: 12),
               ],
               const SizedBox(height: 8),
-              const Text(
+              Text(
                 'Detaylar: README.md → "Firebase kurulumu"',
                 textAlign: TextAlign.center,
-                style: TextStyle(fontSize: 12, color: AppColors.textMuted),
+                style: TextStyle(
+                  fontSize: 12,
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                ),
               ),
             ],
           ),

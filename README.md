@@ -2,27 +2,36 @@
 
 ![APK derle](https://github.com/helixooo183/Rebelz-Media/actions/workflows/build-apk.yml/badge.svg?branch=main)
 
-Koyu temalı bir sohbet uygulaması. Backend: **Firebase Authentication
-(Google Sign-In + e-posta/şifre)** ve **Cloud Firestore**.
+Rebelz Media: **Threads'in sade tipografisi + WhatsApp'ın tanıdık sohbet
+düzeni**. Vurgu rengi logo kırmızısı (`#FF2D2D`), açık/koyu tema **sistem
+ayarıyla** değişir. Backend: **Firebase Authentication (Google Sign-In +
+e-posta/şifre)** ve **Cloud Firestore**.
 
-**Öne çıkanlar (v0.2.0)**
+**Öne çıkanlar (v0.3.0)**
 
-- Kullanıcı adıyla **kişi arama** → doğrudan sohbet (oda adı sorulmaz)
-- **Profil düzenleme**: görünen ad, `@kullanıcı adı`, hakkında, avatar
-  (emoji + renk) ve fotoğraf bağlantısı
+- **Yeni tasarım sistemi**: kırmızı marka paleti, açık + koyu tema, M3 bileşenleri
+- **Marka kimliği**: gerçek logo (`assets/brand/`), logo türevi launcher ikonu,
+  uygulama adı her yerde "Rebelz Media"
+- **Zengin sohbet**: alıntılı yanıt, tepkiler (❤️😂👍), ✓✓ okundu bilgisi,
+  "yazıyor…", **fotoğraf** ve **sesli mesaj**
+- **Kanallar**: yayın kanalı aç, keşfet, katıl/ayrıl (sahibi paylaşır, aboneler okur)
+- **Gruplar**: çok üyeli odalar, gönderen adı/avatarı ile
+- Kullanıcı adıyla **kişi arama** → doğrudan sohbet
 - **Sohbet silme**: sadece benden kaldır ya da tüm mesajlarla kalıcı sil
-- **Kişi engelleme / engel kaldırma**
+- **Kişi engelleme / engel kaldırma** (kural tarafında da zorlanır)
 - **E-posta doğrulama**: kayıtta otomatik gönderim + "tekrar gönder / doğruladım"
 - **Kullanım koşulu onayı**: kayıtta zorunlu onay kutusu; onay zaman damgası
   ve sürümü değiştirilemez kayıt olarak saklanır
 
-Ayrıntılar: [docs/eposta-dogrulama-ve-onay.md](docs/eposta-dogrulama-ve-onay.md) ·
+Ayrıntılar: [docs/medya-ve-kanallar.md](docs/medya-ve-kanallar.md) ·
+[docs/eposta-dogrulama-ve-onay.md](docs/eposta-dogrulama-ve-onay.md) ·
 [docs/profil-sohbet-engelleme.md](docs/profil-sohbet-engelleme.md)
 
 ![Ekranlar](docs/screens.png)
 
-> Sıra (üst sıra): açılış · giriş · kayıt + koşul onayı · sohbetler · boş durum · sohbet · kurulum
-> Sıra (alt sıra): profil · profili düzenle · yeni sohbet (kullanıcı adı) · engellenenler · kullanım koşulları · engelli sohbet
+> Satır 1: açılış · giriş · kayıt + koşul onayı · sohbetler · boş durum · sohbet
+> Satır 2: kurulum · profil · profili düzenle · yeni sohbet (kullanıcı adı) · engellenenler · kullanım koşulları
+> Satır 3: engelli sohbet · kanallar · giriş (açık tema)
 >
 > Görseller CI'da gerçek Flutter render'ıyla üretilir
 > (`Ekran görüntüleri` workflow'u → `test_preview/preview_test.dart --update-goldens`)
@@ -246,17 +255,27 @@ users/{uid}
 usernames/{usernameLower}      uid, usernameLower, createdAt   (tekillik kilidi)
 
 rooms/{roomId}
-  name, photoUrl, type ('dm'|'group'), createdBy, memberIds[],
-  lastMessage, lastMessageAt, hiddenFor[], memberNames, createdAt
+  name, about, photoUrl, type ('dm'|'group'|'channel'), createdBy, ownerUid,
+  memberIds[], subscriberCount, memberNames, memberPhotos,
+  lastMessage, lastMessageAt, lastSenderId, hiddenFor[],
+  typing{uid: ts}, readAt{uid: ts}, createdAt
   └─ messages/{messageId}
-       senderId, senderName, senderPhotoUrl, text, type, createdAt
+       senderId, senderName, senderPhotoUrl, text, type
+       ('text'|'image'|'audio'|'system'),
+       mediaBase64, mediaMime, durationMs, reply{id,senderName,preview},
+       reactions{uid: emoji}, readBy[], deleted, editedAt, createdAt
 ```
 
 Kurallar `hasOnly` ile alan beyaz listesi uygular: `users` güncellemesinde
 yalnızca profil alanları değişebilir; `consents` kayıtları oluşturulduktan
-sonra değiştirilemez/silinemez (kanıt); mesaj içeriği düzenlenemez, yalnızca
-sohbet silme akışında silinebilir. Mesaj yazımı, karşı taraf sizi
-engellediyse kural tarafından reddedilir.
+sonra değiştirilemez/silinemez (kanıt); kanala yalnızca sahibi yazar; mesaj
+boyutları (metin 2000, base64 900 000 karakter) kuralda sınırlıdır; mesaj
+yazımı, karşı taraf sizi engellediyse reddedilir.
+
+Yayın:
+```bash
+firebase deploy --only firestore:rules
+```
 
 ## Test ve önizleme
 
@@ -290,9 +309,12 @@ flutter test test_preview/preview_test.dart --update-goldens   # docs/screens.pn
 - [ ] Secret'ları GitHub'a tanımlama + Play Store'a yükleme (`.aab`, Play App Signing)
 - [ ] iOS uygulamasını kaydetme (`GoogleService-Info.plist`, `REVERSED_CLIENT_ID`)
 - [x] `users` koleksiyonundan fotoğraf gösterimi (avatar `photoUrl` destekler)
-- [ ] Mesaj sayfalama (şu an son 100 mesaj), okundu bilgisi, FCM bildirimleri
-- [x] Sohbet odalarını `memberIds` ile sınırlama
-- [ ] Galeriden fotoğraf yükleme (Firebase Storage + `image_picker`)
+- [x] Okundu bilgisi (✓✓) ve "yazıyor…" göstergesi
+- [x] Galeriden/kameradan fotoğraf gönderme (`image_picker`, base64)
+- [x] Sesli mesaj (`record` + `audioplayers`)
+- [x] Kanallar (yayın) ve çok üyeli gruplar
+- [ ] Medyayı Firebase Storage'a taşıma (şu an base64, ≤ ~650 KB)
+- [ ] Mesaj sayfalama (şu an son 200 mesaj), FCM bildirimleri
 
 ---
 

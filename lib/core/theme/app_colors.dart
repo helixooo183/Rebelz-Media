@@ -1,41 +1,68 @@
 import 'package:flutter/material.dart';
 
-/// Uygulamanın koyu tema paleti.
+/// Rebelz Media marka paleti.
+///
+/// Arayüz renkleri için [Theme.of(context).colorScheme] kullanılır; bu sınıf
+/// yalnızca markaya ait sabit değerleri (kırmızı tonları, gradyanlar) tutar.
 abstract final class AppColors {
-  // Zeminler
-  static const Color background = Color(0xFF080B11);
-  static const Color surface = Color(0xFF111722);
-  static const Color surfaceHigh = Color(0xFF1A2231);
-  static const Color outline = Color(0xFF2A3446);
+  /// Logo kırmızısı.
+  static const Color brand = Color(0xFFFF2D2D);
 
-  // Marka renkleri
-  static const Color primary = Color(0xFF7C5CFF);
-  static const Color primarySoft = Color(0xFF2B2352);
-  static const Color secondary = Color(0xFF22D3EE);
-  static const Color danger = Color(0xFFFF5C7A);
-  static const Color success = Color(0xFF34D399);
+  /// Koyu kırmızı (gradyanın ikinci durağı).
+  static const Color brandDeep = Color(0xFFD6102E);
 
-  // Metin
-  static const Color textPrimary = Color(0xFFF2F4F8);
-  static const Color textSecondary = Color(0xFF96A0B5);
-  static const Color textMuted = Color(0xFF5F6B80);
-
-  static const LinearGradient primaryGradient = LinearGradient(
+  /// Marka gradyanı (buton, aktif sekme, kendi mesaj balonum).
+  static const LinearGradient brandGradient = LinearGradient(
     begin: Alignment.topLeft,
     end: Alignment.bottomRight,
-    colors: [primary, Color(0xFFB15CFF)],
+    colors: [brand, brandDeep],
   );
 
-  static const LinearGradient backgroundGlow = LinearGradient(
-    begin: Alignment.topCenter,
-    end: Alignment.bottomCenter,
-    colors: [Color(0xFF1B1638), background],
-    stops: [0.0, 0.55],
-  );
+  // ---------------------------------------------------------------- koyu tema
+  static const Color darkBackground = Color(0xFF09090B);
+  static const Color darkSurface = Color(0xFF151518);
+  static const Color darkSurfaceHigh = Color(0xFF1F1F24);
+  static const Color darkOutline = Color(0xFF2C2C33);
+  static const Color darkText = Color(0xFFF6F6F7);
+  static const Color darkTextSecondary = Color(0xFFA0A0AB);
 
-  static LinearGradient bubbleGradient(bool isMine) => isMine
-      ? primaryGradient
-      : const LinearGradient(
-          colors: [surfaceHigh, surfaceHigh],
-        );
+  // ---------------------------------------------------------------- açık tema
+  static const Color lightBackground = Color(0xFFF6F6F8);
+  static const Color lightSurface = Color(0xFFFFFFFF);
+  static const Color lightSurfaceHigh = Color(0xFFEFF0F3);
+  static const Color lightOutline = Color(0xFFE1E2E7);
+  static const Color lightText = Color(0xFF0C0C0F);
+  static const Color lightTextSecondary = Color(0xFF6C6C78);
+
+  // ------------------------------------------------------------------ durumlar
+  static const Color success = Color(0xFF22C55E);
+  static const Color warning = Color(0xFFF59E0B);
+  static const Color danger = brand;
+
+  /// Metin/ikon kontrastı için marka üzerine beyaz.
+  static const Color onBrand = Colors.white;
+}
+
+/// Renk/ölçü kısayolları: `context.colors.primary`, `context.muted` gibi.
+extension RebelzTheme on BuildContext {
+  ColorScheme get colors => Theme.of(this).colorScheme;
+
+  bool get isDark => Theme.of(this).brightness == Brightness.dark;
+
+  /// İkincil metin rengi.
+  Color get muted => colors.onSurfaceVariant;
+
+  /// Kart/panel zemini.
+  Color get card => colors.surface;
+
+  /// İkincil zemin (çipler, arama alanları).
+  Color get cardHigh => colors.surfaceContainerHighest;
+
+  /// İnce ayırıcı.
+  Color get line => colors.outlineVariant;
+
+  TextTheme get texts => Theme.of(this).textTheme;
+
+  /// Kart köşe yarıçapı.
+  static const double radius = 20;
 }

@@ -5,10 +5,6 @@ import '../services/services.dart';
 import '../theme/app_colors.dart';
 
 /// E-posta doğrulanmadıysa gösterilen hatırlatma şeridi.
-///
-/// "Tekrar gönder" ve "Doğruladım" aksiyonları vardır; ikincisi Firebase'deki
-/// kullanıcıyı yeniler (bağlantıya tıklandıktan sonra gerekir). Hesap Google
-/// ile açıldıysa ya da Firebase yoksa hiçbir şey çizmez.
 class VerifyEmailBanner extends StatefulWidget {
   const VerifyEmailBanner({
     super.key,
@@ -57,18 +53,12 @@ class _VerifyEmailBannerState extends State<VerifyEmailBanner> {
     try {
       await auth.sendEmailVerification();
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            'Doğrulama bağlantısı ${_email ?? 'e-posta adresine'} gönderildi. '
-            'Gelen kutunda yoksa spam/gereksiz klasörüne bak.',
-          ),
-        ),
+      _toast(
+        'Doğrulama bağlantısı ${_email ?? 'e-posta adresine'} gönderildi. '
+        'Spam/gereksiz klasörünü de kontrol et.',
       );
     } on AuthException catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text(e.message)));
+      if (mounted) _toast(e.message);
     } finally {
       if (mounted) setState(() => _isSending = false);
     }
@@ -88,20 +78,15 @@ class _VerifyEmailBannerState extends State<VerifyEmailBanner> {
 
     if (verified) {
       widget.onVerified?.call();
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('E-posta adresin doğrulandı. Teşekkürler!'),
-        ),
-      );
+      _toast('E-posta adresin doğrulandı. Teşekkürler!');
     } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text(
-            'Henüz doğrulanmamış. Bağlantıya tıkladıktan sonra tekrar dene.',
-          ),
-        ),
-      );
+      _toast('Henüz doğrulanmamış. Bağlantıya tıkladıktan sonra tekrar dene.');
     }
+  }
+
+  void _toast(String message) {
+    ScaffoldMessenger.of(context)
+        .showSnackBar(SnackBar(content: Text(message)));
   }
 
   @override
@@ -111,12 +96,14 @@ class _VerifyEmailBannerState extends State<VerifyEmailBanner> {
     if (_verified && !widget.showWhenVerified) return const SizedBox.shrink();
 
     return Container(
-      margin: const EdgeInsets.fromLTRB(16, 8, 16, 4),
-      padding: const EdgeInsets.fromLTRB(14, 12, 14, 10),
+      margin: const EdgeInsets.fromLTRB(16, 10, 16, 4),
+      padding: const EdgeInsets.fromLTRB(14, 12, 12, 8),
       decoration: BoxDecoration(
-        color: AppColors.primarySoft,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: AppColors.primary.withValues(alpha: 0.45)),
+        color: context.colors.primaryContainer,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(
+          color: context.colors.primary.withValues(alpha: 0.28),
+        ),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -125,38 +112,36 @@ class _VerifyEmailBannerState extends State<VerifyEmailBanner> {
             children: [
               Icon(
                 _verified
-                    ? Icons.verified_outlined
+                    ? Icons.verified_rounded
                     : Icons.mark_email_unread_outlined,
-                size: 20,
-                color: _verified ? AppColors.success : AppColors.secondary,
+                size: 19,
+                color: context.colors.primary,
               ),
-              const SizedBox(width: 10),
+              const SizedBox(width: 9),
               Expanded(
                 child: Text(
                   _verified
-                      ? 'E-posta adresin doğrulandı.'
-                      : 'E-posta adresin henüz doğrulanmadı.',
+                      ? 'E-posta adresin doğrulandı'
+                      : 'E-posta adresin doğrulanmadı',
                   style: const TextStyle(
                     fontSize: 13.5,
-                    fontWeight: FontWeight.w600,
+                    fontWeight: FontWeight.w700,
                   ),
                 ),
               ),
             ],
           ),
           if (!_verified) ...[
-            const SizedBox(height: 6),
+            const SizedBox(height: 4),
             Text(
-              'Doğrulama bağlantısı ${_email ?? 'e-posta adresine'} gönderildi. '
-              'Gelmediyse tekrar gönderebilirsin; spam/gereksiz klasörünü de '
-              'kontrol et.',
-              style: const TextStyle(
+              '${_email ?? 'E-posta adresine'} gönderilen bağlantıya dokun. '
+              'Gelmediyse tekrar gönderebilirsin.',
+              style: TextStyle(
                 fontSize: 12.5,
                 height: 1.4,
-                color: AppColors.textSecondary,
+                color: context.muted,
               ),
             ),
-            const SizedBox(height: 4),
             Row(
               children: [
                 TextButton(
