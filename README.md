@@ -15,7 +15,7 @@ Koyu temalı bir sohbet uygulaması. Backend: **Firebase Authentication
 | **Android paketi** | `com.rebelz.media` |
 | **App ID** | `1:824723400047:android:4f0919a943290bf905749a` |
 | **Kayıtlı SHA-1 (debug)** | `CA:D5:F0:42:CD:90:19:D7:61:E9:90:66:40:8A:D6:21:1C:A9:4C:4A` |
-| **Kayıtlı SHA-1 (release/upload)** | `92:A0:55:FE:C3:85:15:49:CC:45:8D:60:F1:E9:C4:B1:F4:D7:CC:3D` |
+| **Kayıtlı SHA-1 (release/upload)** | `2E:96:3D:A6:63:06:D1:8F:34:A8:E5:1A:BD:7C:24:F1:41:B8:6E:8D` |
 | **Flutter** | 3.35+ · **JDK** 17 · **Android SDK** 36 |
 
 ## Hızlı başlangıç
@@ -117,13 +117,13 @@ değilse adım atlanır, APK debug anahtarıyla imzalanır.
 
 ```bash
 apksigner verify --print-certs build/app/outputs/flutter-apk/app-release.apk
-# Signer #1 certificate SHA-1 digest: 92a055fec3851549cc458d60f1e9c4b1f4d7cc3d
+# Signer #1 certificate SHA-1 digest: 2e963da66306d18f34a8e51abd7c24f141b86e8d
 ```
 
 ## Firebase tarafı
 
 - Android uygulaması `com.rebelz.media` olarak kayıtlı; **iki** SHA-1 eklendi:
-  debug (`CA:D5:F0:42:…:4C:4A`) ve release/upload (`92:A0:55:FE:…:CC:3D`)
+  debug (`CA:D5:F0:42:…:4C:4A`) ve release/upload (`2E:96:3D:A6:…:6E:8D`)
 - `google-services.json` bu iki Android OAuth istemcisini + Web istemcisini içeriyor
 - Google ve Email/Password giriş yöntemleri etkin
 - `google-services.json` → `android/app/google-services.json` (repoda)
@@ -160,7 +160,7 @@ Yine de public bir repoda önerilenler:
 
 
 Firebase'de **iki** parmak izi kayıtlı: debug (`CA:D5:F0:42:…`) ve
-release/upload (`92:A0:55:FE:…`). **Senin bilgisayarındaki Flutter kendi debug
+release/upload (`2E:96:3D:A6:…`). **Senin bilgisayarındaki Flutter kendi debug
 keystore'unu oluşturur ve parmak izi farklıdır**; GitHub Actions her koşuda yeni
 bir keystore üretir. Google girişi `ApiException: 10` verirse o ortamın SHA-1'ini
 Firebase'e ek fingerprint olarak ekle (mevcutlar silinmesin, yan yana durabilir):
@@ -244,7 +244,7 @@ flutter test test_preview/preview_test.dart --update-goldens   # docs/screens.pn
 
 ## Sırada
 
-- [x] Release keystore SHA-1'ini Firebase'e ekleme (`92:A0:55:FE:…:CC:3D`)
+- [x] Release keystore SHA-1'ini Firebase'e ekleme (`2E:96:3D:A6:…:6E:8D`)
 - [x] Release imzalamayı `build.gradle.kts`'e bağlama (`key.properties` / `KEYSTORE_*`)
 - [ ] Secret'ları GitHub'a tanımlama + Play Store'a yükleme (`.aab`, Play App Signing)
 - [ ] iOS uygulamasını kaydetme (`GoogleService-Info.plist`, `REVERSED_CLIENT_ID`)

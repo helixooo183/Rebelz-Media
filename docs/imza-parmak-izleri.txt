@@ -4,7 +4,7 @@ Rebelz Media — imza parmak izleri (SHA-1 / SHA-256)
 Firebase projesi : rebelz-media
 Android paketi   : com.rebelz.media
 App ID           : 1:824723400047:android:4f0919a943290bf905749a
-Son güncelleme   : 2026-10-27 (android/app/google-services.json yenilendi)
+Son güncelleme   : 2026-10-27 · google-services.json yenilendi (2. upload anahtarı)
 
 1) FIREBASE KONSOLUNDA KAYITLI PARMAK İZLERİ (google-services.json ile doğrulandı)
 ----------------------------------------------------------------------------------
@@ -16,14 +16,19 @@ a) Debug keystore — paketin hazırlandığı ortamda üretilen geçici debug a
               silinmesine gerek yok.
 
 b) Release / upload keystore — bu depo için üretilen anahtar (anahtarlar/)
-     SHA1   : 92:A0:55:FE:C3:85:15:49:CC:45:8D:60:F1:E9:C4:B1:F4:D7:CC:3D
-     SHA256 : F4:61:2E:3C:56:39:59:AA:B2:4B:EF:70:3F:BC:62:D4:45:36:35:58:CB:F6:94:F4:56:BB:A8:9A:97:17:DB:35
-     istemci: 824723400047-gl8m2ep7vlbjninu1udlehpbjssmct8j.apps.googleusercontent.com
+     SHA1   : 2E:96:3D:A6:63:06:D1:8F:34:A8:E5:1A:BD:7C:24:F1:41:B8:6E:8D
+     SHA256 : F8:B3:B1:C4:3F:68:14:37:10:C4:0D:FF:FF:D0:27:84:DB:A4:A5:1B:17:28:85:2F:4E:26:21:6C:DD:B9:6C:6F
+     istemci: 824723400047-r8iknp2phdcsnddc9j66983vi10oaari.apps.googleusercontent.com
      dosya  : anahtarlar/upload-keystore.p12 (PKCS#12, alias "upload", RSA 4096)
      parola : anahtarlar/OKUBENI.txt
      NOT    : Yalnızca test/yan yükleme (sideload) için üretildi. Play Store'a
               çıkacak gerçek sürüm için anahtarı kendi güvenli makinende üret ve
-              bu parmak izini Firebase'e EK olarak gir.
+              parmak izini Firebase'e EK olarak gir.
+
+     (Önceki deneme anahtarı 92:A0:55:FE:…:CC:3D ve istemcisi …gl8m2ep7… konsoldan
+      kaldırıldı; o anahtarın dosyası kaybolduğu için eşleşen imza üretilemiyordu.
+      O imzayla dağıtılmış bir APK yok — CI hiçbir zaman upload anahtarıyla
+      derlemedi, dolayısıyla kayıp yok.)
 
 2) DİĞER (Firebase'de kayıtlı olmayan) ANAHTARLAR
 --------------------------------------------------
@@ -48,7 +53,7 @@ Parola/alias yanlissa workflow "Release imza anahtarini ac" adiminda hata verir.
 
 4) KONTROL KOMUTLARI
 --------------------
-  # release keystore (PKCS12)
+  # release keystore (PKCS12) — SHA-1: 2E:96:3D:A6:…:6E:8D
   keytool -list -v -keystore anahtarlar/upload-keystore.p12 -storetype PKCS12 -alias upload
 
   # kendi debug keystore'un
