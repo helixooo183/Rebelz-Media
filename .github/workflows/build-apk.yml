@@ -23,6 +23,10 @@ jobs:
   build-apk:
     runs-on: ubuntu-latest
     timeout-minutes: 60
+    env:
+      # Firebase konsolunda kayitli upload (release) parmak izi.
+      # Docs/README ile ayni deger; degisirse tek yerden guncellenir.
+      EXPECTED_UPLOAD_SHA1: '2E:96:3D:A6:63:06:D1:8F:34:A8:E5:1A:BD:7C:24:F1:41:B8:6E:8D'
 
     steps:
       - uses: actions/checkout@v4
@@ -136,6 +140,12 @@ jobs:
         run: |
           echo "### APK hazır" >> $GITHUB_STEP_SUMMARY
           echo "Artifact: **sohbet-apk**" >> $GITHUB_STEP_SUMMARY
+          APK=build/app/outputs/flutter-apk/app-release.apk
+          APK_SIZE=$(du -h "$APK" | cut -f1)
+          APK_SHA=$(sha256sum "$APK" | cut -d' ' -f1)
+          echo "- \`app-release.apk\`: **$APK_SIZE**" >> $GITHUB_STEP_SUMMARY
+          echo "- apk sha256: \`$APK_SHA\`" >> $GITHUB_STEP_SUMMARY
+          echo "- commit: \`$GITHUB_SHA\` · run: [#$GITHUB_RUN_NUMBER]($GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID)" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           BUILD_TOOLS=$(ls "$ANDROID_HOME/build-tools" | sort -V | tail -1)
           APKSIGNER="$ANDROID_HOME/build-tools/$BUILD_TOOLS/apksigner"
@@ -150,9 +160,11 @@ jobs:
             >> $GITHUB_STEP_SUMMARY || true
           echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
           # Firebase'e kayitli iki parmak izi: release (upload) ve debug.
-          if grep -qi "92:A0:55:FE:C3:85:15:49:CC:45:8D:60:F1:E9:C4:B1:F4:D7:CC:3D" apk-certs.txt; then
+          EXPECTED_LOWER=$(echo "$EXPECTED_UPLOAD_SHA1" | tr 'A-Z' 'a-z' | tr -d ':')
+          if grep -qi "$EXPECTED_LOWER" apk-certs.txt; then
             echo "> ✅ **Upload (release) anahtarı** ile imzalı — Firebase'de kayıtlı SHA-1." \
               >> $GITHUB_STEP_SUMMARY
+            echo "> Beklenen: \`$EXPECTED_UPLOAD_SHA1\`" >> $GITHUB_STEP_SUMMARY
             echo "> Play Store'a yüklenebilir imza budur." >> $GITHUB_STEP_SUMMARY
           elif grep -qi "CA:D5:F0:42:CD:90:19:D7:61:E9:90:66:40:8A:D6:21:1C:A9:4C:4A" apk-certs.txt; then
             echo "> ✅ Debug anahtarı ile imzalı (Firebase'de kayıtlı debug SHA-1)." \
