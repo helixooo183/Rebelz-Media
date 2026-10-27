@@ -1,7 +1,7 @@
 name: sohbet
 description: "Rebelz Media — Firebase destekli, açık/koyu temalı sohbet ve kanal uygulaması."
 publish_to: 'none'
-version: 0.4.0+5
+version: 0.4.0+6
 
 environment:
   sdk: ^3.9.0
