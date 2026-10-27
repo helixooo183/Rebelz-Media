@@ -197,10 +197,12 @@ void main() {
     });
 
     test('kalan süre metni gün cinsinden yazılır', () {
-      expect(
-        UsernameChangePolicy.waitText(simdi.add(const Duration(days: 12))),
-        '12 gün sonra',
-      );
+      // Gerçek "şimdi"ye göre hesaplanır: 12 gün 1 saat sonrası → 12 gün.
+      final onIkiGunSonra =
+          DateTime.now().add(const Duration(days: 12, hours: 1));
+      expect(UsernameChangePolicy.waitText(onIkiGunSonra), '12 gün sonra');
+      expect(UsernameChangePolicy.waitText(DateTime.now()), 'bugün');
+      expect(UsernameChangePolicy.waitText(null), 'kısa süre sonra');
     });
 
     test('profil getter\'ları sayacı yansıtır', () {
