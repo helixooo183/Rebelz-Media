@@ -174,11 +174,19 @@ jobs:
           if-no-files-found: error
           retention-days: 30
 
+      # always(): derleme düşse bile özet/teşhis yazılsın.
       - name: İmza doğrulama (apksigner) + özet
+        if: always()
         run: |
+          APK=build/app/outputs/flutter-apk/app-release.apk
+          if [ ! -f "$APK" ]; then
+            echo "### ⚠️ Release APK üretilmedi" >> $GITHUB_STEP_SUMMARY
+            echo "Önceki adımların annotation'larına bakın (imza anahtarı veya Gradle)." \
+              >> $GITHUB_STEP_SUMMARY
+            exit 0
+          fi
           echo "### APK hazır" >> $GITHUB_STEP_SUMMARY
           echo "Artifact: **sohbet-apk**" >> $GITHUB_STEP_SUMMARY
-          APK=build/app/outputs/flutter-apk/app-release.apk
           APK_SIZE=$(du -h "$APK" | cut -f1)
           APK_SHA=$(sha256sum "$APK" | cut -d' ' -f1)
           echo "- \`app-release.apk\`: **$APK_SIZE**" >> $GITHUB_STEP_SUMMARY
