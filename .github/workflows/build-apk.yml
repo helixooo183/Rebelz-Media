@@ -3,6 +3,11 @@ name: APK derle
 # Bu workflow, APK'yı GitHub'ın makinelerinde üretir (yerel Android SDK
 # kurulumu gerekmez). Actions sekmesinden "Run workflow" ile çalıştırın,
 # bitince APK'yı artifact olarak indirin.
+#
+# Koşu adı dal + kısa commit ile gösterilir; art arda gelen derlemeler
+# listede ayırt edilebilsin.
+
+run-name: "APK derle · ${{ github.ref_name }} · ${{ github.sha }}"
 
 on:
   workflow_dispatch:
