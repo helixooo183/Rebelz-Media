@@ -255,7 +255,8 @@ class _RoomsScreenState extends State<RoomsScreen> {
       ),
     );
 
-    if (accepted != true || !mounted) {
+    if (accepted != true) {
+      if (!mounted) return;
       if (accepted == false) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(

@@ -503,6 +503,8 @@ class _RoomSettingsScreenState extends State<RoomSettingsScreen> {
       ),
     );
 
+    if (!mounted) return;
+
     switch (action) {
       case 'report':
         final sent = await showReportSheet(
@@ -511,7 +513,7 @@ class _RoomSettingsScreenState extends State<RoomSettingsScreen> {
           targetName: name,
           roomId: widget.roomId,
         );
-        if (sent) _toast('Şikayetin iletildi.');
+        if (sent && mounted) _toast('Şikayetin iletildi.');
       case 'mod':
         await _setModerator(uid, !isMod);
       case 'transfer':
