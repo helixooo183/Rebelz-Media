@@ -113,3 +113,28 @@ firebase deploy --only firestore:rules
 ```
 
 Kurallar `rules_version = '2'` ve `let` kullanmaz (v2'de desteklenmez).
+
+## Marka varlıkları (v0.4.0)
+
+Tüm görseller `tool/marka_uret.py` ile **kaynak** dosyalardan üretilir
+(`kaynak/rebelz-banner.jpg`, `kaynak/google-g.png`). Çıktılar:
+
+| dosya | kullanım |
+|---|---|
+| `assets/brand/rebelz-brush.png` | kırmızı R + beyaz EBELZ (açılış, banner) |
+| `assets/brand/rebelz-mark.png` | yalnızca kırmızı R (launcher ikonu) |
+| `assets/brand/wordmark` | yalnızca beyaz EBELZ |
+| `assets/brand/banner.png` | giriş ekranı üst bandı (koyu grunge zemin) |
+| `assets/brand/buton-grunge.png` | kırmızı grunge doku — ana buton zemini |
+| `assets/brand/google-g.png` | gerçek Google "G" logosu |
+
+Yeniden üretmek için:
+
+```bash
+pip install pillow numpy
+python3 tool/marka_uret.py
+```
+
+Logo zeminden **kanal farkı** ile ayrılır (kırmızı: `r - max(g,b) > 40`,
+beyaz: parlak + renk farkı düşük); sıçrama noktaları `tight_bbox()` ile
+kırpma dışında bırakılır, böylece ikon kareye büyük yerleşir.

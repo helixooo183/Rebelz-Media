@@ -179,7 +179,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
               ),
               const SizedBox(height: 22),
               Text(
-                'Rebelz Media · v0.3.0\n'
+                'Rebelz Media · v0.4.0\n'
                 'Firebase Auth (Google + E-posta) · Cloud Firestore',
                 textAlign: TextAlign.center,
                 style: TextStyle(

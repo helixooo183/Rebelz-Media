@@ -5,8 +5,8 @@ import 'google_logo.dart';
 
 /// Google ile giriş butonu.
 ///
-/// Marka kurallarına uygun olarak gerçek dört renkli "G" logosu kullanılır;
-/// zemin temaya göre beyaz (açık) ya da koyu yüzey olur.
+/// Koyu temada marka kurallarına uygun **koyu yüzey + ince çerçeve** kullanılır
+/// (beyaz metin, sol tarafta gerçek dört renkli "G"); açık temada beyaz yüzey.
 class GoogleSignInButton extends StatelessWidget {
   const GoogleSignInButton({
     super.key,
@@ -24,17 +24,19 @@ class GoogleSignInButton extends StatelessWidget {
     final isEnabled = onPressed != null && !isLoading;
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
+    final surface = isDark ? const Color(0xFF141416) : Colors.white;
+    final border = isDark ? const Color(0xFF2E2E33) : context.line;
+    final labelColor = isDark ? const Color(0xFFF2F2F4) : const Color(0xFF1F1F1F);
+
     return AnimatedOpacity(
       duration: const Duration(milliseconds: 160),
       opacity: isEnabled ? 1 : 0.55,
       child: Container(
-        height: 54,
+        height: 56,
         decoration: BoxDecoration(
-          color: isDark ? const Color(0xFFF7F7F9) : Colors.white,
+          color: surface,
           borderRadius: BorderRadius.circular(16),
-          border: Border.all(
-            color: isDark ? Colors.transparent : context.line,
-          ),
+          border: Border.all(color: border),
         ),
         child: Material(
           color: Colors.transparent,
@@ -54,14 +56,15 @@ class GoogleSignInButton extends StatelessWidget {
                   : Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        const GoogleLogo(size: 21),
+                        const GoogleLogo(size: 22),
                         const SizedBox(width: 12),
                         Text(
                           label,
-                          style: const TextStyle(
+                          style: TextStyle(
                             fontSize: 15.5,
-                            fontWeight: FontWeight.w600,
-                            color: Color(0xFF1F1F1F),
+                            fontWeight: FontWeight.w700,
+                            letterSpacing: -0.1,
+                            color: labelColor,
                           ),
                         ),
                       ],
@@ -73,3 +76,6 @@ class GoogleSignInButton extends StatelessWidget {
     );
   }
 }
+
+/// Koyu temada vurgu rengi (buton içi ikon vb.) için kısayol.
+const Color googleAccent = AppColors.brand;

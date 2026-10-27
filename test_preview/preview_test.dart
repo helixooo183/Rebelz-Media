@@ -16,7 +16,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:sohbet/core/theme/app_theme.dart';
-import 'package:sohbet/core/widgets/app_logo.dart';
+import 'package:sohbet/core/theme/brand_assets.dart';
 import 'package:sohbet/features/auth/presentation/login_screen.dart';
 import 'package:sohbet/features/auth/presentation/register_screen.dart';
 import 'package:sohbet/features/auth/presentation/splash_screen.dart';
@@ -287,18 +287,20 @@ void main() {
     view.devicePixelRatio = 3.0;
   });
 
-  // İlk golden'da logo görünsün: marka görsellerini ImageCache'e ısıt.
-  testWidgets('00 logo ısınma', (tester) async {
-    await tester.pumpWidget(
-      _wrap(const Center(child: RebelzLogo(height: 40))),
-    );
+  // Golden'larda marka görselleri boş görünmesin: ImageCache'e ısıt.
+  testWidgets('00 marka görselleri ısınma', (tester) async {
+    await tester.pumpWidget(_wrap(const SizedBox.shrink()));
+    final context = tester.element(find.byType(SizedBox).first);
     await tester.runAsync(() async {
-      final context = tester.element(find.byType(RebelzLogo));
-      await precacheImage(const AssetImage('assets/brand/rebelz-mark.png'), context);
-      await precacheImage(
-        const AssetImage('assets/brand/rebelz-wordmark.png'),
-        context,
-      );
+      for (final asset in const [
+        BrandAssets.brush,
+        BrandAssets.mark,
+        BrandAssets.banner,
+        BrandAssets.googleG,
+        BrandAssets.grunge,
+      ]) {
+        await precacheImage(AssetImage(asset), context);
+      }
     });
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 50));
@@ -483,6 +485,7 @@ void main() {
   testWidgets('02 login', (tester) async {
     await tester.pumpWidget(_wrap(const LoginScreen()));
     await tester.pump();
+    await tester.pump(const Duration(milliseconds: 80));
     await expectLater(
       find.byType(MaterialApp),
       matchesGoldenFile('goldens/02_login.png'),
@@ -492,6 +495,7 @@ void main() {
   testWidgets('03 register (koşul onayı kutusu)', (tester) async {
     await tester.pumpWidget(_wrap(const RegisterScreen()));
     await tester.pump();
+    await tester.pump(const Duration(milliseconds: 80));
     await expectLater(
       find.byType(MaterialApp),
       matchesGoldenFile('goldens/03_register.png'),
@@ -652,18 +656,19 @@ void main() {
     );
   });
 
-  testWidgets('16 giriş — açık tema', (tester) async {
+  testWidgets('16 profil — açık tema', (tester) async {
     await tester.pumpWidget(
       MaterialApp(
         debugShowCheckedModeBanner: false,
         theme: AppTheme.light,
-        home: const LoginScreen(),
+        home: ProfileScreen(repository: users),
       ),
     );
     await tester.pump();
+    await tester.pump(const Duration(milliseconds: 50));
     await expectLater(
       find.byType(MaterialApp),
-      matchesGoldenFile('goldens/16_login_light.png'),
+      matchesGoldenFile('goldens/16_profile_light.png'),
     );
   });
 

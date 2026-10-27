@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../core/theme/app_colors.dart';
-import '../../../core/widgets/app_logo.dart';
+import '../../../core/theme/brand_assets.dart';
 
 /// Oturum bilgisi yüklenirken gösterilen açılış ekranı.
 class SplashScreen extends StatelessWidget {
@@ -27,13 +27,19 @@ class SplashScreen extends StatelessWidget {
               ),
             ),
           ),
-          const Center(
+          Center(
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                RebelzLogo(height: 48),
-                SizedBox(height: 34),
-                SizedBox(
+                Image.asset(
+                  BrandAssets.brush,
+                  height: 96,
+                  fit: BoxFit.contain,
+                  filterQuality: FilterQuality.high,
+                  semanticLabel: 'Rebelz Media',
+                ),
+                const SizedBox(height: 34),
+                const SizedBox(
                   height: 20,
                   width: 20,
                   child: CircularProgressIndicator(

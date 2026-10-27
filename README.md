@@ -10,7 +10,9 @@ e-posta/şifre)** ve **Cloud Firestore**.
 **Öne çıkanlar (v0.3.0)**
 
 - **Yeni tasarım sistemi**: kırmızı marka paleti, açık + koyu tema, M3 bileşenleri
-- **Marka kimliği**: gerçek logo (`assets/brand/`), logo türevi launcher ikonu,
+- **Marka kimliği (v0.4.0)**: fırça logolu yeni kimlik — `assets/brand/`
+  (kırmızı R + beyaz EBELZ), logo türevi launcher ikonu, giriş ekranında
+  büyük banner + koyu tema (#0A0A0A), koyu inputlar ve **grunge dokulu buton**;
   uygulama adı her yerde "Rebelz Media"
 - **Zengin sohbet**: alıntılı yanıt, tepkiler (❤️😂👍), ✓✓ okundu bilgisi,
   "yazıyor…", **fotoğraf** ve **sesli mesaj**

@@ -133,7 +133,8 @@ class _LoginScreenState extends State<LoginScreen> {
   void _showError(String message) {
     if (!mounted) return;
     ScaffoldMessenger.of(context)
-        .showSnackBar(SnackBar(content: Text(message)));
+      ..hideCurrentSnackBar()
+      ..showSnackBar(SnackBar(content: Text(message)));
   }
 
   @override
@@ -141,34 +142,24 @@ class _LoginScreenState extends State<LoginScreen> {
     return AuthScaffold(
       title: 'Tekrar hoş geldin',
       subtitle: 'Sohbetlerine, kanallarına ve çevrene kaldığın yerden devam et.',
-      footer: Row(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Text(
-            'Hesabın yok mu?',
-            style: TextStyle(color: context.muted, fontSize: 14),
-          ),
-          TextButton(
-            onPressed: (_isLoading || _isGoogleLoading)
-                ? null
-                : () => context.go(AppRoutes.register),
-            child: const Text('Kayıt ol'),
-          ),
-        ],
+      logoHeight: 88,
+      footer: _Footer(
+        busy: _isLoading || _isGoogleLoading,
+        onRegister: () => context.go(AppRoutes.register),
       ),
       children: [
         GoogleSignInButton(
           onPressed: _googleSignIn,
           isLoading: _isGoogleLoading,
         ),
-        const SizedBox(height: 20),
+        const SizedBox(height: 16),
         const OrDivider(label: 'veya e-posta ile'),
-        const SizedBox(height: 20),
+        const SizedBox(height: 16),
         Form(
           key: _formKey,
           child: Column(
             children: [
-              AppTextField(
+              AppTextField.dark(
                 controller: _emailController,
                 hintText: 'ornek@mail.com',
                 labelText: 'E-posta',
@@ -183,8 +174,8 @@ class _LoginScreenState extends State<LoginScreen> {
                   return null;
                 },
               ),
-              const SizedBox(height: 16),
-              AppTextField(
+              const SizedBox(height: 14),
+              AppTextField.dark(
                 controller: _passwordController,
                 hintText: '••••••••',
                 labelText: 'Şifre',
@@ -202,19 +193,31 @@ class _LoginScreenState extends State<LoginScreen> {
                   return null;
                 },
               ),
-              const SizedBox(height: 6),
               Align(
                 alignment: Alignment.centerRight,
                 child: TextButton(
                   onPressed: (_isLoading || _isGoogleLoading || _isSendingReset)
                       ? null
                       : _resetPassword,
+                  style: TextButton.styleFrom(
+                    foregroundColor: AppColors.brand,
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 10,
+                    ),
+                    // Metin stili temadan türetilir (sabit TextStyle yazı
+                    // tipini kaybettirip kutucuk çizilmesine yol açıyordu).
+                    textStyle: Theme.of(context).textTheme.labelLarge?.copyWith(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w700,
+                        ),
+                  ),
                   child: Text(
                     _isSendingReset ? 'Gönderiliyor…' : 'Şifremi unuttum',
                   ),
                 ),
               ),
-              const SizedBox(height: 8),
+              const SizedBox(height: 4),
               PrimaryButton(
                 label: 'Giriş yap',
                 isLoading: _isLoading,
@@ -222,6 +225,38 @@ class _LoginScreenState extends State<LoginScreen> {
               ),
             ],
           ),
+        ),
+      ],
+    );
+  }
+}
+
+class _Footer extends StatelessWidget {
+  const _Footer({required this.busy, required this.onRegister});
+
+  final bool busy;
+  final VoidCallback onRegister;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        const Text(
+          'Hesabın yok mu?',
+          style: TextStyle(fontSize: 14.5, color: Color(0xFFD5D5DA)),
+        ),
+        TextButton(
+          onPressed: busy ? null : onRegister,
+          style: TextButton.styleFrom(
+            foregroundColor: AppColors.brand,
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+            textStyle: Theme.of(context).textTheme.labelLarge?.copyWith(
+                  fontSize: 14.5,
+                  fontWeight: FontWeight.w700,
+                ),
+          ),
+          child: const Text('Kayıt ol'),
         ),
       ],
     );
