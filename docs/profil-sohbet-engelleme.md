@@ -135,7 +135,10 @@ Kayıt: `room_invites/{code}` → `roomId`, `createdBy`, `roomName`, `roomType`,
 `A-Z 2-9` alfabesinden üretilir.
 
 ### Bağlantıya dokununca uygulama açılır (derin bağlantı)
-`rebelzmedia://katil/<kod>` bağlantısı `AndroidManifest.xml` içindeki
+`https://rebelz-media.web.app/katil/?k=<kod>` bağlantısı tarayıcıda açılan
+küçük bir sayfadır (`docs/katil/index.html`) ve uygulamanın
+`rebelzmedia://katil/<kod>` şemasına yönlendirir. Özel şema
+`AndroidManifest.xml` içindeki
 `intent-filter` ile yakalanır; WhatsApp/e-postada linke dokununca uygulama
 açılır ve **Davet** ekranı gelir.
 
@@ -222,7 +225,23 @@ Bir mesaja (metin, fotoğraf veya sesli mesaj) **uzun bas** → işlem menüsü:
 fotoğraflarda hem görsel üzerinde hem altında ikinci bir saat+✓✓ vardı;
 kaldırıldı.)
 
-## 10. Sohbet silme
+## 10. Kanala katılma, ayrılma ve kanalı silme
+
+| Nerede | Ne yapar |
+|---|---|
+| **Kanallar** sekmesi → kanal satırındaki **Katıl** | Herkese açık kanala abone olur |
+| Aynı satırdaki **Ayrıl** | Abonelikten çıkar (kanal listeden kalkar) |
+| Sohbet ekranı **⋮** → **Kanala katıl / Kanaldan ayrıl** | Kanal içinden aynı işlem |
+| Sohbet ekranı **⋮** → **Kanalı sil** (yalnızca sahip) | Kanal + tüm mesajlar kalıcı silinir (onay ister) |
+
+- Sahip, sahipliği devretmeden ayrılamaz (uyarı verilir).
+- Kurallar: üye olmayan biri **yalnızca kendi uid'sini** ekleyip çıkarabilir
+  (`memberIds` farkı tam olarak +1 / −1 olmalı). Başkasını ekleme/çıkarma
+  yönetim yetkisi ister.
+- Kanala erişim hatası (`permission-denied`) bu kural eksikliğinden
+  kaynaklanıyordu; güncel `firestore.rules` ile çözüldü.
+
+## 11. Sohbet silme
 
 Sohbet balonuna **uzun bas** ya da satırdaki **⋮** menüsü:
 
@@ -231,7 +250,7 @@ Sohbet balonuna **uzun bas** ya da satırdaki **⋮** menüsü:
 | **Sadece benden kaldır** | `rooms.hiddenFor`'a uid eklenir. Karşı taraf sohbeti görmeye devam eder. Karşı taraf yeni mesaj yazarsa sohbet ikinizde de geri gelir. |
 | **Sohbeti tamamen sil** | Tüm mesajlar (300'erli partiler) ve oda dokümanı silinir. Doğrudan sohbette iki taraf da silebilir; eski grup sohbetlerinde yalnızca oluşturan. |
 
-## 11. Engelleme
+## 12. Engelleme
 
 - Sohbet ekranı sağ üst menü → **Kişiyi engelle** (onay istenir).
 - Engellenen kişi:
@@ -244,7 +263,7 @@ Sohbet balonuna **uzun bas** ya da satırdaki **⋮** menüsü:
 - Engeli kaldırdıktan sonra sohbeti yeniden açmak için *Yeni sohbet* →
   kullanıcı adını ara.
 
-## 12. Kurulum adımları (tek seferlik)
+## 13. Kurulum adımları (tek seferlik)
 
 1. `firestore.rules` dosyasını yayınlayın:
    `firebase deploy --only firestore:rules` (ya da konsoldan yapıştırıp
@@ -259,7 +278,7 @@ Sohbet balonuna **uzun bas** ya da satırdaki **⋮** menüsü:
    (tipik 10-25 KB, üst sınır 400 000 karakter). Eski `https://` bağlantıları
    da desteklenmeye devam eder.
 
-## 13. Bilinen sınırlar
+## 14. Bilinen sınırlar
 
 - Engelleme, istemci + kural düzeyinde uygulanır; engellenen kişi teknik
   olarak yeni bir hesapla yazabilir. Kalıcı engelleme için Cloud Functions

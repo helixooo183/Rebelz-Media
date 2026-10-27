@@ -504,4 +504,56 @@ void main() {
       );
     });
   });
+
+  group('Davet bağlantısı https ve katıl/ayrıl', () {
+    test('paylaşılan bağlantı https ve kod içerir', () {
+      final link = RoomInvite.linkFor('K7M2P9QD');
+      expect(link.startsWith('https://'), isTrue);
+      expect(link.contains('katil'), isTrue);
+      expect(link.contains('K7M2P9QD'), isTrue);
+    });
+
+    test('https bağlantısından kod okunur (?k=)', () {
+      expect(
+        inviteCodeFromUri(
+          Uri.parse('https://rebelz-media.web.app/katil/?k=k7m2p9qd'),
+        ),
+        'K7M2P9QD',
+      );
+    });
+
+    test('yol biçimi ve özel şema hâlâ çalışıyor', () {
+      expect(
+        inviteCodeFromUri(Uri.parse('https://ornek.com/katil/K7M2P9QD')),
+        'K7M2P9QD',
+      );
+      expect(
+        inviteCodeFromUri(Uri.parse(RoomInvite.deepLinkFor('K7M2P9QD'))),
+        'K7M2P9QD',
+      );
+    });
+
+    test('özel şema bağlantısı https ile aynı kodu taşır', () {
+      expect(RoomInvite.deepLinkFor('ABCD2345'), 'rebelzmedia://katil/ABCD2345');
+    });
+
+    test('kanalda sahip/moderatör/üye yetkileri', () {
+      const channel = ChatRoom(
+        id: 'c1',
+        name: 'Duyuru',
+        createdBy: 'sahip',
+        ownerUid: 'sahip',
+        memberIds: ['sahip', 'mod', 'uye'],
+        type: RoomType.channel,
+        roles: {'mod': ChatRoom.roleModerator},
+      );
+
+      expect(channel.sahipMi('sahip'), isTrue);
+      expect(channel.moderatorMu('mod'), isTrue);
+      expect(channel.hasMember('uye'), isTrue);
+      expect(channel.hasMember('yabanci'), isFalse);
+      // Sahip gidebilmek için önce devretmeli; arayüz bunu engeller.
+      expect(channel.yonetebilirMi('uye'), isFalse);
+    });
+  });
 }
