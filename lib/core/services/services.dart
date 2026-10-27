@@ -1,4 +1,5 @@
 import '../../features/chat/data/chat_repository.dart';
+import '../../features/moderation/data/moderation_repository.dart';
 import '../../features/profile/data/user_repository.dart';
 import 'auth_service.dart';
 
@@ -10,6 +11,9 @@ final AuthService authServiceInstance = AuthService();
 final ChatRepository chatRepositoryInstance = ChatRepository();
 
 final UserRepository userRepositoryInstance = UserRepository();
+
+final ModerationRepository moderationRepositoryInstance =
+    ModerationRepository();
 
 // ---------------------------------------------------------------------------
 // Test/önizleme (Firebase başlatılmamış) ortamlarda patlamayan erişimciler.

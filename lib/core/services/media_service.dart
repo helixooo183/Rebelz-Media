@@ -19,6 +19,9 @@ class PickedImage {
 
   String get base64 => base64Encode(bytes);
 
+  /// Firestore'a yazılabilen `data:` URI'si (avatar alanı için).
+  String get dataUri => 'data:$mime;base64,$base64';
+
   int get sizeKb => (bytes.length / 1024).round();
 }
 
@@ -64,6 +67,27 @@ class MediaService {
     if (file == null) return null;
 
     final bytes = await file.readAsBytes();
+    return PickedImage(
+      bytes: bytes,
+      mime: file.mimeType ?? _guessMime(file.name),
+    );
+  }
+
+  /// Profil avatarı: galeriden **kare ve küçük** bir görsel seçer.
+  ///
+  /// Avatarlar en fazla 96-120 px gösterildiği için 320 px yeterli; base64
+  /// olarak (Storage'sız) saklandığından boyut önemli — tipik çıktı 10-25 KB.
+  Future<PickedImage?> pickAvatar() async {
+    final file = await _picker.pickImage(
+      source: ImageSource.gallery,
+      maxWidth: 320,
+      maxHeight: 320,
+      imageQuality: 68,
+    );
+    if (file == null) return null;
+
+    final bytes = await file.readAsBytes();
+    if (bytes.isEmpty) return null;
     return PickedImage(
       bytes: bytes,
       mime: file.mimeType ?? _guessMime(file.name),

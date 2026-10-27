@@ -35,6 +35,23 @@ service cloud.firestore {
         && value.matches('^[a-z0-9_]{3,20}$');
     }
 
+    // Avatar alanı: `https://…` ya da galeriden seçilen base64 data URI.
+    // 400 000 karakter ≈ 390 KB üst sınır (tipik değer 10-25 KB).
+    function isPhoto(value) {
+      return value is string && value.size() <= 400000;
+    }
+
+    // Kullanıcı adı kotası: alan varsa int olmalı ve en fazla 1 artabilir.
+    function kotaGecerli() {
+      return (!('usernameChanges' in request.resource.data)
+              || (request.resource.data.usernameChanges is int
+                  && request.resource.data.usernameChanges >= 0))
+        && (!('usernameChanges' in request.resource.data)
+              || !('usernameChanges' in resource.data)
+              || request.resource.data.usernameChanges
+                   <= resource.data.usernameChanges + 1);
+    }
+
     // ---------------------------------------------------------------- users
     match /users/{userId} {
       allow get: if signedIn();
@@ -45,9 +62,12 @@ service cloud.firestore {
              'displayName', 'displayNameLower', 'email', 'emailVerified',
              'photoUrl', 'createdAt', 'lastSeenAt',
              'username', 'usernameLower', 'bio', 'avatarEmoji', 'avatarColor',
+             'usernameChanges', 'usernameWindowStart',
              'termsVersion', 'termsAcceptedAt',
            ])
-        && isNonEmptyString(request.resource.data.displayName, 80);
+        && isNonEmptyString(request.resource.data.displayName, 80)
+        && (!('photoUrl' in request.resource.data)
+              || isPhoto(request.resource.data.photoUrl));
 
       // Sahibi profil alanlarını günceller; e-posta/uid gibi alanlar sabit.
       allow update: if isOwner(userId)
@@ -55,10 +75,14 @@ service cloud.firestore {
              .hasOnly([
                'displayName', 'displayNameLower', 'photoUrl', 'lastSeenAt',
                'username', 'usernameLower', 'bio', 'avatarEmoji',
-               'avatarColor', 'termsVersion', 'termsAcceptedAt',
+               'avatarColor', 'usernameChanges', 'usernameWindowStart',
+               'termsVersion', 'termsAcceptedAt',
                'emailVerified',
              ])
         && isNonEmptyString(request.resource.data.displayName, 80)
+        && kotaGecerli()
+        && (!('photoUrl' in request.resource.data)
+              || isPhoto(request.resource.data.photoUrl))
         && (!('usernameLower' in request.resource.data.diff(resource.data)
                 .affectedKeys())
             || isUsername(request.resource.data.usernameLower));
@@ -117,8 +141,24 @@ service cloud.firestore {
       }
 
       // Kanal sahibi mi? (kanal dışındaki sohbetlerde iki taraf da eşittir.)
+      // Kanal/grup sahibi mi?
+      function isRoomOwner() {
+        return room().get('ownerUid', room().get('createdBy', '')) ==
+               request.auth.uid;
+      }
+
+      function isRoomMod() {
+        return room().get('roles', {}).get(request.auth.uid, '') == 'mod';
+      }
+
+      // Kanallarda yalnızca sahip/moderatör yazar; `onlyModsPost` izni
+      // kapatılırsa tüm aboneler yazabilir.
+      function onlyModsPost() {
+        return room().get('permissions', {}).get('onlyModsPost', true);
+      }
+
       function canWriteContent() {
-        return !isChannel() || room().ownerUid == request.auth.uid;
+        return !isChannel() || isRoomOwner() || isRoomMod() || !onlyModsPost();
       }
 
       // Karşı taraf beni engellediyse mesaj gönderemem. Doğrudan sohbetler
@@ -147,7 +187,8 @@ service cloud.firestore {
              'name', 'about', 'createdBy', 'ownerUid', 'memberIds',
              'subscriberCount', 'createdAt', 'lastMessage', 'lastMessageAt',
              'lastSenderId', 'type', 'photoUrl', 'hiddenFor', 'memberNames',
-             'memberPhotos', 'typing', 'readAt',
+             'memberPhotos', 'typing', 'readAt', 'roles', 'permissions',
+             'isPrivate',
            ])
         && isNonEmptyString(request.resource.data.name, 80)
         && request.resource.data.memberIds.size() >= 1
@@ -169,6 +210,7 @@ service cloud.firestore {
                'lastMessage', 'lastMessageAt', 'lastSenderId', 'memberIds',
                'hiddenFor', 'name', 'about', 'photoUrl', 'memberNames',
                'memberPhotos', 'type', 'typing', 'readAt', 'subscriberCount',
+               'roles', 'permissions', 'ownerUid', 'isPrivate',
              ])
         && (request.resource.data.diff(resource.data).affectedKeys()
               .hasOnly(['typing', 'readAt', 'hiddenFor', 'memberIds',
@@ -182,7 +224,28 @@ service cloud.firestore {
             || isChannel())
         && (!('memberIds' in request.resource.data.diff(resource.data)
                 .affectedKeys())
-            || request.resource.data.memberIds.size() <= 200);
+            || (request.resource.data.memberIds.size() <= 200
+                && (request.resource.data.memberIds
+                      .hasAll(resource.data.memberIds)
+                    || !(request.auth.uid in request.resource.data.memberIds)
+                    || isRoomOwner() || isRoomMod())))
+        // Rol/izin/sahiplik değişiklikleri yalnızca yönetime açıktır ve
+        // sahiplik yalnızca mevcut sahip tarafından devredilebilir.
+        && (!('roles' in request.resource.data.diff(resource.data)
+                .affectedKeys())
+            || isRoomOwner() || isRoomMod())
+        && (!('permissions' in request.resource.data.diff(resource.data)
+                .affectedKeys())
+            || isRoomOwner() || isRoomMod())
+        && (!('ownerUid' in request.resource.data.diff(resource.data)
+                .affectedKeys())
+            || (isRoomOwner()
+                && request.resource.data.ownerUid
+                     in request.resource.data.memberIds))
+        // Özel/halka açık ayarını yalnızca sahip değiştirir.
+        && (!('isPrivate' in request.resource.data.diff(resource.data)
+                .affectedKeys())
+            || isRoomOwner());
 
       // Silme: DM'de iki taraf, grupta oluşturan, kanalda sahibi.
       allow delete: if signedIn()
@@ -190,8 +253,9 @@ service cloud.firestore {
         && (resource.data.type == 'dm'
             || (resource.data.type == 'group'
                 && resource.data.createdBy == request.auth.uid)
-            || (resource.data.type == 'channel'
-                && resource.data.ownerUid == request.auth.uid));
+            || ((resource.data.type == 'channel' || resource.data.type == 'group')
+                && resource.data.get('ownerUid',
+                     resource.data.get('createdBy', '')) == request.auth.uid));
 
       // ------------------------------------------------------------- mesajlar
       match /messages/{messageId} {
@@ -220,8 +284,8 @@ service cloud.firestore {
               || isNonEmptyString(request.resource.data.text, 2000))
           && (!('text' in request.resource.data)
               || request.resource.data.text.size() <= 2000)
-          // Kanala yalnızca sahibi yazar.
-          && (!isChannel() || room().ownerUid == request.auth.uid);
+          // Kanala yalnızca sahibi/moderatörü yazar (izin açıksa herkes).
+          && (!isChannel() || isRoomOwner() || isRoomMod() || !onlyModsPost());
 
         // Tepki, okundu, düzenleme ve "silindi" işaretleri.
         allow update: if isMember()
@@ -233,8 +297,69 @@ service cloud.firestore {
               || resource.data.senderId == request.auth.uid);
 
         // Sohbeti silme akışı için üyeler mesajları kaldırabilir.
-        allow delete: if isMember();
+        // Kanal/gruplarda moderatörler yalnızca izin verildiyse silebilir.
+        allow delete: if signedIn()
+          && (resource.data.senderId == request.auth.uid
+              || (room().get('permissions', {})
+                      .get('modsDeleteMessages', false) == true
+                  && (isRoomOwner() || isRoomMod()))
+              || (isRoomOwner() && !isChannel()));
       }
+    }
+
+    // ----------------------------------------------------------- room_invites
+    // Davet bağlantıları: oluşturan yazar/iptal eder, giriş yapan herkes
+    // kodu okuyabilir (katılmak için gereken tek bilgi kodun kendisidir).
+    match /room_invites/{code} {
+      allow get: if signedIn();
+      allow list: if false;
+      allow create: if signedIn()
+        && request.resource.data.createdBy == request.auth.uid
+        && isNonEmptyString(request.resource.data.roomId, 128)
+        && request.resource.data.keys().hasOnly([
+             'roomId', 'createdBy', 'roomName', 'roomType', 'createdAt',
+           ]);
+      allow update: if false;
+      allow delete: if signedIn()
+        && (resource.data.createdBy == request.auth.uid
+            || get(/databases/$(database)/documents/rooms/$(resource.data.roomId))
+                 .data.get('ownerUid', '') == request.auth.uid);
+    }
+
+    // ---------------------------------------------------------------- reports
+    // Şikayetler yalnızca eklenir; gönderen kendi kaydını okuyabilir.
+    match /reports/{reportId} {
+      allow create: if signedIn()
+        && request.resource.data.reporterUid == request.auth.uid
+        && request.resource.data.status == 'open'
+        && isNonEmptyString(request.resource.data.reason, 60)
+        && request.resource.data.details.size() <= 1000
+        && request.resource.data.messageSnippet.size() <= 200
+        && request.resource.data.keys().hasOnly([
+             'reporterUid', 'reporterName', 'targetUid', 'targetName',
+             'reason', 'details', 'roomId', 'messageId', 'messageSnippet',
+             'status', 'createdAt',
+           ]);
+      allow read: if signedIn()
+        && resource.data.reporterUid == request.auth.uid;
+      allow update, delete: if false;
+    }
+
+    // -------------------------------------------------------- support_requests
+    // Destek talepleri de yalnızca eklenir; sahibi kendi taleplerini okur.
+    match /support_requests/{ticketId} {
+      allow create: if signedIn()
+        && request.resource.data.uid == request.auth.uid
+        && request.resource.data.status == 'open'
+        && isNonEmptyString(request.resource.data.topic, 40)
+        && request.resource.data.message.size() >= 10
+        && request.resource.data.message.size() <= 2000
+        && request.resource.data.keys().hasOnly([
+             'uid', 'name', 'email', 'topic', 'message', 'status',
+             'platform', 'createdAt',
+           ]);
+      allow read: if signedIn() && resource.data.uid == request.auth.uid;
+      allow update, delete: if false;
     }
 
     // Varsayılan: her şeyi kapat.

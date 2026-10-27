@@ -3,6 +3,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 
 import '../domain/models/chat_message.dart';
 import '../domain/models/chat_room.dart';
+import '../domain/models/room_invite.dart';
 
 /// Sohbet, mesaj ve kanal verileriyle ilgili tüm Firestore işlemleri.
 ///
@@ -213,6 +214,12 @@ class ChatRepository {
       // Profil okunamazsa Auth fotoğrafıyla devam.
     }
 
+    // Galeriden seçilen avatar `data:image/…;base64,…` olarak saklanır.
+    // Aynı blob'u **her mesaja** kopyalamak dokümanları şişirir; mesaj
+    // satırlarında avatar zaten ad/baş harften çizildiği için burada
+    // gönderilmez (oda ve profil kayıtları avatary taşımaya devam eder).
+    if (senderPhotoUrl.startsWith('data:')) senderPhotoUrl = '';
+
     final preview = switch (type) {
       MessageType.image => '📷 Fotoğraf',
       MessageType.audio => '🎙 Sesli mesaj',
@@ -329,6 +336,7 @@ class ChatRepository {
   Future<String> createChannel({
     required String name,
     String about = '',
+    bool isPrivate = false,
   }) async {
     final uid = _requireUid();
     final trimmed = name.trim();
@@ -345,6 +353,7 @@ class ChatRepository {
       'ownerUid': uid,
       'memberIds': [uid],
       'subscriberCount': 1,
+      'isPrivate': isPrivate,
       'photoUrl': '',
       'hiddenFor': <String>[],
       'lastMessage': '',
@@ -370,6 +379,241 @@ class ChatRepository {
     await _rooms.doc(roomId).set({
       'memberIds': FieldValue.arrayRemove([uid]),
       'subscriberCount': FieldValue.increment(-1),
+    }, SetOptions(merge: true));
+  }
+
+  // ---------------------------------------------------------------------------
+  // Kanal / grup yönetimi
+  // ---------------------------------------------------------------------------
+
+  /// Kanal veya grubun adını/açıklamasını günceller.
+  Future<void> updateRoomInfo(
+    String roomId, {
+    String? name,
+    String? about,
+  }) async {
+    _requireUid();
+    final data = <String, dynamic>{};
+    if (name != null) {
+      final trimmed = name.trim();
+      if (trimmed.length < 3) {
+        throw const ChatException('Ad en az 3 karakter olmalı.');
+      }
+      data['name'] = trimmed;
+    }
+    if (about != null) data['about'] = about.trim();
+    if (data.isEmpty) return;
+    await _rooms.doc(roomId).set(data, SetOptions(merge: true));
+  }
+
+  /// Bir izni açar/kapatır (bkz. `ChatRoom.permOnlyModsPost`).
+  Future<void> setPermission(
+    String roomId,
+    String key, {
+    required bool value,
+  }) async {
+    _requireUid();
+    await _rooms.doc(roomId).set({
+      'permissions.$key': value,
+    }, SetOptions(merge: true));
+  }
+
+  /// Üyeyi moderatör yapar ya da moderatörlüğünü kaldırır.
+  Future<void> setModerator(
+    String roomId,
+    String uid, {
+    required bool moderator,
+  }) async {
+    _requireUid();
+    await _rooms.doc(roomId).set({
+      'roles.$uid': moderator ? ChatRoom.roleModerator : ChatRoom.roleMember,
+    }, SetOptions(merge: true));
+  }
+
+  /// Üyeyi odadan çıkarır (mesajları silinmez).
+  Future<void> removeMember(String roomId, String uid) async {
+    _requireUid();
+    await _rooms.doc(roomId).set({
+      'memberIds': FieldValue.arrayRemove([uid]),
+      'subscriberCount': FieldValue.increment(-1),
+      'roles.$uid': FieldValue.delete(),
+      'memberNames.$uid': FieldValue.delete(),
+      'memberPhotos.$uid': FieldValue.delete(),
+    }, SetOptions(merge: true));
+  }
+
+  /// Odaya üye ekler (profil bilgisi verilirse adı da yazılır).
+  Future<void> addMember(
+    String roomId, {
+    required String uid,
+    String name = '',
+    String photoUrl = '',
+  }) async {
+    _requireUid();
+    final data = <String, dynamic>{
+      'memberIds': FieldValue.arrayUnion([uid]),
+      'subscriberCount': FieldValue.increment(1),
+    };
+    if (name.trim().isNotEmpty) data['memberNames.$uid'] = name.trim();
+    if (photoUrl.trim().isNotEmpty) {
+      // base64 avatarlar oda dokümanını şişirmesin.
+      if (!photoUrl.startsWith('data:')) {
+        data['memberPhotos.$uid'] = photoUrl.trim();
+      }
+    }
+    await _rooms.doc(roomId).set(data, SetOptions(merge: true));
+  }
+
+  /// Kanalın/grupların sahipliğini devreder; eski sahip moderatör olur.
+  Future<void> transferOwnership(String roomId, String newOwnerUid) async {
+    final uid = _requireUid();
+    await _rooms.doc(roomId).set({
+      'ownerUid': newOwnerUid,
+      'roles.$newOwnerUid': FieldValue.delete(),
+      'roles.$uid': ChatRoom.roleModerator,
+    }, SetOptions(merge: true));
+  }
+
+  /// Odadan ayrılır (sahip önce devretmeli — arayüz uyarır).
+  Future<void> leaveRoom(String roomId) async {
+    final uid = _requireUid();
+    await _rooms.doc(roomId).set({
+      'memberIds': FieldValue.arrayRemove([uid]),
+      'subscriberCount': FieldValue.increment(-1),
+      'hiddenFor': FieldValue.arrayUnion([uid]),
+      'roles.$uid': FieldValue.delete(),
+    }, SetOptions(merge: true));
+  }
+
+  /// Bir üyenin oda içindeki profil bilgisi (ad/fotoğraf).
+  Future<Map<String, String>> fetchMemberInfo(String uid) async {
+    try {
+      final doc = await _db.collection('users').doc(uid).get();
+      final data = doc.data() ?? const <String, dynamic>{};
+      final photo = (data['photoUrl'] as String?)?.trim() ?? '';
+      return {
+        'name': (data['displayName'] as String?)?.trim() ?? '',
+        'photoUrl': photo.startsWith('data:') ? '' : photo,
+      };
+    } catch (_) {
+      return const <String, String>{};
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // Davet bağlantıları
+  // ---------------------------------------------------------------------------
+
+  CollectionReference<Map<String, dynamic>> get _invites =>
+      _db.collection('room_invites');
+
+  /// Kanal/grup için yeni bir davet kodu üretir ve döndürür.
+  ///
+  /// Kod `room_invites/{code}` dokümanına yazılır; katılmak isteyen kişi
+  /// kodu (ya da `rebelzmedia://katil/<kod>` bağlantısını) girer.
+  Future<RoomInvite> createInvite({
+    required String roomId,
+    String roomName = '',
+    String roomType = '',
+  }) async {
+    final uid = _requireUid();
+    final code = generateInviteCode();
+    final ref = _invites.doc(code);
+    await ref.set({
+      'roomId': roomId,
+      'createdBy': uid,
+      'roomName': roomName.trim(),
+      'roomType': roomType,
+      'createdAt': FieldValue.serverTimestamp(),
+    });
+    return RoomInvite(
+      code: code,
+      roomId: roomId,
+      createdBy: uid,
+      roomName: roomName.trim(),
+      roomType: roomType,
+      createdAt: DateTime.now(),
+    );
+  }
+
+  /// Odanın geçerli davet bağlantıları.
+  Stream<List<RoomInvite>> watchInvites(String roomId) {
+    return _invites
+        .where('roomId', isEqualTo: roomId)
+        .snapshots()
+        .map((snapshot) {
+      final list = snapshot.docs.map(RoomInvite.fromDoc).toList();
+      list.sort((a, b) {
+        final at = a.createdAt ?? DateTime.fromMillisecondsSinceEpoch(0);
+        final bt = b.createdAt ?? DateTime.fromMillisecondsSinceEpoch(0);
+        return bt.compareTo(at);
+      });
+      return list;
+    });
+  }
+
+  /// Davet kodunu iptal eder.
+  Future<void> revokeInvite(String code) async {
+    _requireUid();
+    await _invites.doc(code).delete();
+  }
+
+  /// Kod/bağlantı ile odaya katılır ve oda kimliğini döndürür.
+  Future<String> joinByInviteCode(String rawCode) async {
+    final uid = _requireUid();
+    final code = normalizeInviteCode(rawCode);
+    if (code.length < 6) {
+      throw const ChatException('Davet kodu geçersiz görünüyor.');
+    }
+
+    final inviteDoc = await _invites.doc(code).get();
+    if (!inviteDoc.exists) {
+      throw const ChatException(
+        'Davet bulunamadı. Bağlantı iptal edilmiş olabilir.',
+      );
+    }
+
+    final roomId = (inviteDoc.data()?['roomId'] as String?)?.trim() ?? '';
+    if (roomId.isEmpty) {
+      throw const ChatException('Davet geçersiz.');
+    }
+
+    final roomDoc = await _rooms.doc(roomId).get();
+    if (!roomDoc.exists) {
+      throw const ChatException('Davet edilen kanal/grup artık yok.');
+    }
+
+    final data = roomDoc.data() ?? const <String, dynamic>{};
+    final members = (data['memberIds'] as List<dynamic>? ?? const [])
+        .whereType<String>()
+        .toList();
+
+    if (!members.contains(uid)) {
+      final myName = (_auth.currentUser?.displayName ?? '').trim();
+      await _rooms.doc(roomId).set({
+        'memberIds': FieldValue.arrayUnion([uid]),
+        'subscriberCount': FieldValue.increment(1),
+        'hiddenFor': FieldValue.arrayRemove([uid]),
+        if (myName.isNotEmpty) 'memberNames.$uid': myName,
+      }, SetOptions(merge: true));
+    } else {
+      // Zaten üye: yalnızca listede görünmesini sağla.
+      await _rooms.doc(roomId).set({
+        'hiddenFor': FieldValue.arrayRemove([uid]),
+      }, SetOptions(merge: true));
+    }
+
+    return roomId;
+  }
+
+  /// Kanalı özel (yalnızca davetle) ya da herkese açık yapar.
+  Future<void> setChannelPrivacy(
+    String roomId, {
+    required bool isPrivate,
+  }) async {
+    _requireUid();
+    await _rooms.doc(roomId).set({
+      'isPrivate': isPrivate,
     }, SetOptions(merge: true));
   }
 

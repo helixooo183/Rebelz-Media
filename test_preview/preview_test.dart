@@ -23,9 +23,11 @@ import 'package:sohbet/features/auth/presentation/splash_screen.dart';
 import 'package:sohbet/features/chat/data/chat_repository.dart';
 import 'package:sohbet/features/chat/domain/models/chat_message.dart';
 import 'package:sohbet/features/chat/domain/models/chat_room.dart';
+import 'package:sohbet/features/chat/domain/models/room_invite.dart';
 import 'package:sohbet/features/chat/presentation/channels_screen.dart';
 import 'package:sohbet/features/chat/presentation/chat_screen.dart';
 import 'package:sohbet/features/chat/presentation/new_chat_sheet.dart';
+import 'package:sohbet/features/chat/presentation/room_settings_screen.dart';
 import 'package:sohbet/features/chat/presentation/rooms_screen.dart';
 import 'package:sohbet/features/profile/data/user_repository.dart';
 import 'package:sohbet/features/profile/domain/user_profile.dart';
@@ -109,7 +111,11 @@ class _FakeChatRepository implements ChatRepository {
   ) async {}
 
   @override
-  Future<String> createChannel({required String name, String about = ''}) async =>
+  Future<String> createChannel({
+    required String name,
+    String about = '',
+    bool isPrivate = false,
+  }) async =>
       'kanal_fake';
 
   @override
@@ -126,6 +132,80 @@ class _FakeChatRepository implements ChatRepository {
 
   @override
   Future<void> deleteChat(String roomId) async {}
+
+  // ------------------------------------------------- kanal / grup yönetimi
+  @override
+  Future<RoomInvite> createInvite({
+    required String roomId,
+    String roomName = '',
+    String roomType = '',
+  }) async =>
+      RoomInvite(
+        code: 'K7M2P9QD',
+        roomId: roomId,
+        createdBy: 'u1',
+        roomName: roomName,
+        roomType: roomType,
+      );
+
+  @override
+  Stream<List<RoomInvite>> watchInvites(String roomId) => Stream.value(
+        const <RoomInvite>[],
+      );
+
+  @override
+  Future<void> revokeInvite(String code) async {}
+
+  @override
+  Future<String> joinByInviteCode(String rawCode) async => 'r1';
+
+  @override
+  Future<void> setChannelPrivacy(
+    String roomId, {
+    required bool isPrivate,
+  }) async {}
+
+  @override
+  Future<void> updateRoomInfo(
+    String roomId, {
+    String? name,
+    String? about,
+  }) async {}
+
+  @override
+  Future<void> setPermission(
+    String roomId,
+    String key, {
+    required bool value,
+  }) async {}
+
+  @override
+  Future<void> setModerator(
+    String roomId,
+    String uid, {
+    required bool moderator,
+  }) async {}
+
+  @override
+  Future<void> removeMember(String roomId, String uid) async {}
+
+  @override
+  Future<void> addMember(
+    String roomId, {
+    required String uid,
+    String name = '',
+    String photoUrl = '',
+  }) async {}
+
+  @override
+  Future<void> transferOwnership(String roomId, String newOwnerUid) async {}
+
+  @override
+  Future<void> leaveRoom(String roomId) async {}
+
+  @override
+  Future<Map<String, String>> fetchMemberInfo(String uid) async =>
+      const <String, String>{};
 }
 
 /// Firebase'e dokunmayan sahte kullanıcı deposu.
@@ -690,6 +770,43 @@ void main() {
     await expectLater(
       find.byType(MaterialApp),
       matchesGoldenFile('goldens/13_chat_blocked.png'),
+    );
+  });
+
+  testWidgets('17 kanal ayarları (moderatörler ve izinler)', (tester) async {
+    const kanal = ChatRoom(
+      id: 'c9',
+      name: 'Rebelz Duyuru',
+      createdBy: 'u1',
+      ownerUid: 'u1',
+      memberIds: ['u1', 'u2', 'u3'],
+      type: 'channel',
+      about: 'Ürün güncellemeleri ve yeni özellikler',
+      subscriberCount: 128,
+      roles: {'u2': ChatRoom.roleModerator},
+      memberNames: {
+        'u1': 'Ayşe Yılmaz',
+        'u2': 'Deniz Kaya',
+        'u3': 'Emre Demir',
+      },
+      permissions: {ChatRoom.permModsDeleteMessages: true},
+    );
+
+    await tester.pumpWidget(
+      _wrap(
+        RoomSettingsScreen(
+          roomId: 'c9',
+          repository: _FakeChatRepository(rooms: <ChatRoom>[kanal]),
+          userRepository: users,
+          currentUserId: 'u1',
+        ),
+      ),
+    );
+    await tester.pump();
+
+    await expectLater(
+      find.byType(MaterialApp),
+      matchesGoldenFile('goldens/17_room_settings.png'),
     );
   });
 }

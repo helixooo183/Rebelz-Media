@@ -32,6 +32,86 @@ class _ChannelsScreenState extends State<ChannelsScreen> {
 
   bool _isBusy = false;
 
+  /// Kanal arama: ad ve açıklamada geçen metin.
+  final _searchController = TextEditingController();
+  String _query = '';
+
+  @override
+  void initState() {
+    super.initState();
+    _searchController.addListener(() {
+      final value = _searchController.text.trim().toLowerCase();
+      if (value == _query) return;
+      setState(() => _query = value);
+    });
+  }
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  /// Davet kodu/bağlantısı ile kanal veya gruba katılır.
+  Future<void> _joinWithCode() async {
+    final controller = TextEditingController();
+    final code = await showDialog<String>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Davet ile katıl'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text(
+              'Sana gelen davet bağlantısını ya da 8 karakterlik kodu yaz.',
+              style: TextStyle(fontSize: 13, height: 1.4),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: controller,
+              autofocus: true,
+              textCapitalization: TextCapitalization.characters,
+              decoration: const InputDecoration(
+                hintText: 'Örn. K7M2P9QD veya rebelzmedia://katil/…',
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: const Text('Vazgeç'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialogContext, controller.text),
+            child: const Text('Katıl'),
+          ),
+        ],
+      ),
+    );
+
+    final raw = code ?? '';
+    controller.dispose();
+    if (raw.trim().isEmpty || !mounted) return;
+
+    setState(() => _isBusy = true);
+    try {
+      final roomId = await _repository.joinByInviteCode(raw);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Davet kabul edildi, katıldın.')),
+      );
+      await context.push(AppRoutes.chat(roomId, name: 'Sohbet'));
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('$e')),
+      );
+    } finally {
+      if (mounted) setState(() => _isBusy = false);
+    }
+  }
+
   Future<void> _openChannel(ChatRoom channel) async {
     if (!channel.hasMember(_myUid)) {
       try {
@@ -83,6 +163,7 @@ class _ChannelsScreenState extends State<ChannelsScreen> {
     final nameController = TextEditingController();
     final aboutController = TextEditingController();
     final formKey = GlobalKey<FormState>();
+    var isPrivate = false;
 
     final created = await showModalBottomSheet<String>(
       context: context,
@@ -130,14 +211,34 @@ class _ChannelsScreenState extends State<ChannelsScreen> {
                       hintText: 'Ne paylaşacaksın? (isteğe bağlı)',
                     ),
                   ),
-                  const SizedBox(height: 20),
+                  const SizedBox(height: 6),
+                  StatefulBuilder(
+                    builder: (context, setSheetState) => SwitchListTile(
+                      contentPadding: EdgeInsets.zero,
+                      value: isPrivate,
+                      onChanged: (value) =>
+                          setSheetState(() => isPrivate = value),
+                      title: const Text('Özel kanal'),
+                      subtitle: Text(
+                        isPrivate
+                            ? 'Keşfette görünmez, yalnızca davetle katılınır.'
+                            : 'Herkese açık: kanallar listesinde görünür.',
+                        style: TextStyle(
+                          fontSize: 11.5,
+                          color: sheetContext.muted,
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 14),
                   PrimaryButton(
                     label: 'Kanalı oluştur',
                     onPressed: () {
                       if (formKey.currentState?.validate() != true) return;
                       Navigator.pop(
                         sheetContext,
-                        '${nameController.text}|||${aboutController.text}',
+                        '${nameController.text}|||${aboutController.text}'
+                            '|||${isPrivate ? '1' : '0'}',
                       );
                     },
                   ),
@@ -154,12 +255,14 @@ class _ChannelsScreenState extends State<ChannelsScreen> {
     final parts = created.split('|||');
     final channelName = parts.first;
     final channelAbout = parts.length > 1 ? parts[1] : '';
+    final channelPrivate = parts.length > 2 && parts[2] == '1';
 
     setState(() => _isBusy = true);
     try {
       final id = await _repository.createChannel(
         name: channelName,
         about: channelAbout,
+        isPrivate: channelPrivate,
       );
       if (!mounted) return;
       await context.push(AppRoutes.chat(id, name: channelName.trim()));
@@ -188,11 +291,46 @@ class _ChannelsScreenState extends State<ChannelsScreen> {
                     child: Text('Kanallar', style: context.texts.displaySmall),
                   ),
                   IconButton(
+                    tooltip: 'Davet kodu ile katıl',
+                    onPressed: _isBusy ? null : _joinWithCode,
+                    icon: const Icon(Icons.qr_code_rounded, size: 22),
+                  ),
+                  IconButton(
                     tooltip: 'Kanal aç',
                     onPressed: _isBusy ? null : _createChannel,
                     icon: const Icon(Icons.add_rounded, size: 26),
                   ),
                 ],
+              ),
+            ),
+            // ---- arama çubuğu ------------------------------------------
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 2, 16, 8),
+              child: TextField(
+                controller: _searchController,
+                textInputAction: TextInputAction.search,
+                decoration: InputDecoration(
+                  hintText: 'Kanal ara',
+                  prefixIcon: const Icon(Icons.search_rounded, size: 20),
+                  isDense: true,
+                  filled: true,
+                  fillColor: context.card,
+                  suffixIcon: _query.isEmpty
+                      ? null
+                      : IconButton(
+                          tooltip: 'Temizle',
+                          onPressed: () => _searchController.clear(),
+                          icon: const Icon(Icons.close_rounded, size: 18),
+                        ),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(14),
+                    borderSide: BorderSide(color: context.line),
+                  ),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(14),
+                    borderSide: BorderSide(color: context.line),
+                  ),
+                ),
               ),
             ),
             Expanded(
@@ -210,8 +348,22 @@ class _ChannelsScreenState extends State<ChannelsScreen> {
                     return const Center(child: CircularProgressIndicator());
                   }
 
-                  final channels = snapshot.data!;
-                  if (channels.isEmpty) {
+                  // Özel kanallar keşfette görünmez; yalnızca üyesi
+                  // olduklarım listelenir.
+                  final visible = snapshot.data!
+                      .where((c) =>
+                          !c.isPrivate || c.hasMember(_myUid))
+                      .toList();
+
+                  final channels = _query.isEmpty
+                      ? visible
+                      : visible
+                          .where((c) =>
+                              c.name.toLowerCase().contains(_query) ||
+                              c.about.toLowerCase().contains(_query))
+                          .toList();
+
+                  if (visible.isEmpty) {
                     return EmptyState(
                       icon: Icons.campaign_outlined,
                       title: 'Henüz kanal yok',
@@ -219,6 +371,17 @@ class _ChannelsScreenState extends State<ChannelsScreen> {
                           'paylaş, abonelerin anında görsün.',
                       actionLabel: 'Kanal aç',
                       onAction: _createChannel,
+                    );
+                  }
+
+                  if (channels.isEmpty) {
+                    return EmptyState(
+                      icon: Icons.search_off_rounded,
+                      title: 'Sonuç yok',
+                      message: '"$_query" ile eşleşen kanal bulunamadı. '
+                          'Davet bağlantın varsa kod ile katılabilirsin.',
+                      actionLabel: 'Kod ile katıl',
+                      onAction: _joinWithCode,
                     );
                   }
 
@@ -282,6 +445,14 @@ class _ChannelsScreenState extends State<ChannelsScreen> {
                                           ),
                                         ),
                                       ),
+                                      if (channel.isPrivate) ...[
+                                        const SizedBox(width: 6),
+                                        Icon(
+                                          Icons.lock_rounded,
+                                          size: 13,
+                                          color: context.muted,
+                                        ),
+                                      ],
                                       if (isMine) ...[
                                         const SizedBox(width: 6),
                                         Icon(

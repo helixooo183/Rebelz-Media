@@ -61,8 +61,8 @@ flutter test           # 6 test
 
 **0) En kolay: hazır APK'yı indir**
 
-`.github/workflows/release.yml`, `pubspec.yaml` sürümü değiştiğinde imzalı
-release APK'sını **GitHub Release** olarak yayınlar — giriş gerekmez, süresi
+`.github/workflows/release.yml`, `main` dalında `pubspec.yaml` sürümü
+değiştiğinde imzalı release APK'sını **GitHub Release** olarak yayınlar — giriş gerekmez, süresi
 dolmaz:
 
 - Son sürümler: <https://github.com/helixooo183/Rebelz-Media/releases/latest>
@@ -269,15 +269,27 @@ Windows: `%USERPROFILE%\.android\debug.keystore`. Keystore yoksa bir kez
 ```
 users/{uid}
   displayName, displayNameLower, username, usernameLower, bio,
-  photoUrl, avatarEmoji, avatarColor, email, emailVerified,
-  termsVersion, termsAcceptedAt, createdAt, lastSeenAt
+  photoUrl                       ← https URL ya da data:image/…;base64 (galeri)
+  avatarEmoji, avatarColor       ← eski kayıtlar için (artık düzenlenmez)
+  usernameChanges, usernameWindowStart   ← 30 günde 2 değişiklik kotası
+  email, emailVerified, termsVersion, termsAcceptedAt, createdAt, lastSeenAt
   ├─ consents/{id}    uid, email, version, accepted, platform, acceptedAt
   └─ blocked/{uid}    blockedUid, createdAt
 
 usernames/{usernameLower}      uid, usernameLower, createdAt   (tekillik kilidi)
 
+room_invites/{code}            roomId, createdBy, roomName, roomType,
+                               createdAt                  (davet bağlantıları)
+reports/{id}                   reporterUid, targetUid, targetName, reason,
+                               details, roomId, messageId, messageSnippet,
+                               status, createdAt          (şikayetler)
+support_requests/{id}          uid, name, email, topic, message, status,
+                               platform, createdAt        (destek talepleri)
+
 rooms/{roomId}
   name, about, photoUrl, type ('dm'|'group'|'channel'), createdBy, ownerUid,
+  roles {uid: 'mod'}, permissions {onlyModsPost, onlyModsAddMembers,
+  modsDeleteMessages}, isPrivate (özel kanal),
   memberIds[], subscriberCount, memberNames, memberPhotos,
   lastMessage, lastMessageAt, lastSenderId, hiddenFor[],
   typing{uid: ts}, readAt{uid: ts}, createdAt
@@ -330,12 +342,22 @@ flutter test test_preview/preview_test.dart --update-goldens   # docs/screens.pn
 - [x] Release imzalamayı `build.gradle.kts`'e bağlama (`key.properties` / `KEYSTORE_*`)
 - [ ] Secret'ları GitHub'a tanımlama + Play Store'a yükleme (`.aab`, Play App Signing)
 - [ ] iOS uygulamasını kaydetme (`GoogleService-Info.plist`, `REVERSED_CLIENT_ID`)
-- [x] `users` koleksiyonundan fotoğraf gösterimi (avatar `photoUrl` destekler)
+- [x] **Galeriden profil fotoğrafı** (`image_picker` → 320 px, base64) ve
+      `users.photoUrl` üzerinden avatar gösterimi
+- [x] **Kullanıcı adı kotası**: 30 günde 2 değişiklik, sonra dönem sonuna
+      kadar kilit (`usernameChanges`, `usernameWindowStart`)
 - [x] Okundu bilgisi (✓✓) ve "yazıyor…" göstergesi
 - [x] Galeriden/kameradan fotoğraf gönderme (`image_picker`, base64)
 - [x] Sesli mesaj (`record` + `audioplayers`)
 - [x] Kanallar (yayın) ve çok üyeli gruplar
 - [ ] Medyayı Firebase Storage'a taşıma (şu an base64, ≤ ~650 KB)
+- [x] **Mesaj ve profil şikayet etme** (`reports`) + **destek talepleri**
+      (`support_requests`)
+- [x] **Kanal/grup ayarları**: moderatör ekleme-kaldırma, moderatör izinleri,
+      kanal izinleri, sahipliği devretme
+- [x] Sohbetlerde sağa/sola kaydırarak kategori değiştirme
+- [x] **Davet bağlantısı** (kanal + grup) ve **özel/halka açık kanal**
+- [x] Kanallar ekranında **arama çubuğu**
 - [ ] Mesaj sayfalama (şu an son 200 mesaj), FCM bildirimleri
 
 ---

@@ -7,6 +7,7 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/widgets/app_text_field.dart';
 import '../../../core/widgets/user_avatar.dart';
 import '../../profile/data/user_repository.dart';
+import '../../moderation/presentation/report_sheet.dart';
 import '../../profile/domain/user_profile.dart';
 import '../data/chat_repository.dart';
 
@@ -260,6 +261,11 @@ class _NewChatSheetState extends State<NewChatSheet> {
             color: context.muted,
           ),
           onTap: () => _startChat(profile),
+          onLongPress: () => showReportSheet(
+            context,
+            targetUid: profile.uid,
+            targetName: profile.displayName,
+          ),
         );
       },
     );

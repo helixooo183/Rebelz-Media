@@ -7,8 +7,9 @@ modelini açıklar.
 
 - Her kullanıcı **benzersiz** bir kullanıcı adı seçebilir:
   3-20 karakter, yalnızca küçük harf / rakam / alt çizgi (`ayse_y`).
-- Profilde ad, hakkında (bio), avatar (emoji + renk) ve istersen profil
-  fotoğrafı bağlantısı düzenlenebilir.
+- Profilde ad, hakkında (bio) ve **galeriden seçilen profil fotoğrafı**
+  düzenlenebilir. Emoji/renk panelleri ile fotoğraf bağlantısı (URL) alanı
+  kaldırıldı; avatar yalnızca galeriden seçilir (veya kaldırılır).
 - Sohbetler ekranındaki **Yeni sohbet** butonu artık oda adı sormuyor:
   kullanıcı adı veya görünen ad yazıldıkça eşleşen kişiler
   (fotoğraf + ad + `@kullanıcıadı`) listelenir; birine dokununca doğrudan
@@ -23,7 +24,9 @@ Veri modeli:
 users/{uid}
   displayName, displayNameLower
   username, usernameLower
-  bio, photoUrl, avatarEmoji, avatarColor
+  bio, photoUrl                        ← https URL ya da data:image/…;base64
+  avatarEmoji, avatarColor             ← eski kayıtlar için (artık düzenlenmez)
+  usernameChanges, usernameWindowStart ← kullanıcı adı kotası
   email, emailVerified, createdAt, lastSeenAt
   termsVersion, termsAcceptedAt
 
@@ -31,13 +34,105 @@ usernames/{usernameLower}
   uid, usernameLower, createdAt        ← tekillik kilidi
 
 rooms/{roomId}                        ← dm_<uidA>_<uidB> veya grup kimliği
-  name, photoUrl, type ('dm'|'group'), createdBy, memberIds
-  lastMessage, lastMessageAt, hiddenFor, memberNames
+  name, photoUrl, type ('dm'|'group'|'channel'), createdBy, ownerUid
+  memberIds, roles {uid: 'mod'}, permissions {onlyModsPost, ...}
+  isPrivate (özel kanal/grup)
+  lastMessage, lastMessageAt, hiddenFor, memberNames, memberPhotos
+
+reports/{id}                          şikayetler (yalnızca ekleme)
+  reporterUid, targetUid, targetName, reason, details,
+  roomId, messageId, messageSnippet, status, createdAt
+support_requests/{id}                 destek talepleri (yalnızca ekleme)
+  uid, name, email, topic, message, status, platform, createdAt
+room_invites/{code}                   davet bağlantıları
+  roomId, createdBy, roomName, roomType, createdAt
 rooms/{roomId}/messages/{msgId}
   senderId, senderName, senderPhotoUrl, text, type, createdAt
 ```
 
-## 2. Sohbet silme
+## 2. Kullanıcı adı değişiklik kotası
+
+- **30 günlük dönemde en fazla 2 değişiklik.** Haklar bitince kullanıcı adı
+  alanı kilitlenir ve kalan süre yazılır ("Yeni hak 12 gün sonra açılır").
+- Dönem dolduğunda sayaç sıfırlanır, yeniden 2 hak tanınır.
+- İlk kez kullanıcı adı **almak** (henüz ad yokken) hak harcamaz.
+- Kontrol `saveProfile` içindeki Firestore transaction'ında yapılır:
+  iki cihazdan aynı anda kaydetmek hakkı iki kez harcamaz.
+- Alanlar: `usernameChanges` (0-2), `usernameWindowStart` (Timestamp).
+  `firestore.rules` sayacın en fazla 1 artmasına izin verir.
+
+## 3. Şikayet ve destek
+
+| Akış | Nereden | Kayıt |
+| --- | --- | --- |
+| **Profili şikayet et** | Sohbet üst menüsü → *Profili şikayet et* · yeni sohbet aramasında satıra uzun bas · kanal/grup üye listesi | `reports/{id}` |
+| **Mesajı şikayet et** | Mesaja uzun bas → *Mesajı şikayet et* | `reports/{id}` (`roomId`, `messageId`, `messageSnippet`) |
+| **Destek talebi** | Profil → *Destek ve geri bildirim* | `support_requests/{id}` |
+
+- Sebepler hazır listeden seçilir (spam, taciz, nefret söylemi, cinsel içerik,
+  şiddet tehdidi, sahte hesap, diğer) ve istenirse ayrıntı yazılır.
+- Her iki koleksiyon **yalnızca ekleme** kabul eder (kanıt niteliği); kullanıcı
+  yalnızca **kendi** kaydını okuyabilir. İnceleme paneli (moderatör tarafı)
+  sonraki adımda eklenebilir.
+- Destek ekranında taleplerin durumu (*İncelemede*) ve geçmişi görünür.
+
+## 4. Kanal ve grup ayarları
+
+Sohbet üst menüsü → **Kanal/grup ayarları** (kanal ve gruplarda görünür).
+
+| Bölüm | Kim yapabilir | Ne yapar |
+| --- | --- | --- |
+| Ad / açıklama | sahip, moderatör | Başlık ve açıklamayı günceller |
+| İzinler | sahip, moderatör | *Yalnızca moderatörler paylaşsın* (kanal), *yalnızca moderatörler üye eklesin*, *moderatörler mesaj silebilsin* |
+| Moderatörler | sahip, moderatör | Kullanıcı adıyla arayıp moderatör ekler, listeden çıkarır |
+| Üyeler | herkes görür | Sahip/moderatör: rol ver, üyeyi çıkar, şikayet et. Sahip ayrıca **sahipliği devreder** |
+| Ayrıl | herkes | Üyelikten çıkar (sahip önce devretmeli) |
+
+- Roller `rooms/{roomId}.roles` (`uid → "mod"`), izinler `permissions`
+  haritasında (`onlyModsPost`, `onlyModsAddMembers`, `modsDeleteMessages`)
+  tutulur; sahiplik `ownerUid` alanındadır (grupta yoksa `createdBy`).
+- Kanallarda varsayılan davranış **yalnızca sahip/moderatör paylaşır**;
+  `onlyModsPost` kapatılırsa tüm aboneler gönderi paylaşabilir. Yetkisiz
+  üyeler yazma alanı yerine "Yalnızca moderatörler paylaşım yapabilir" barını
+  görür.
+- Gruplarda tüm üyeler yazabilir; kısıt yalnızca üye ekleme/mesaj silme için
+  ayarlanır.
+- Kurallar: `roles`/`permissions` yalnızca sahip veya moderatör tarafından,
+  `ownerUid` yalnızca mevcut sahip tarafından ve yeni sahip üye ise
+  değiştirilebilir.
+
+## 5. Davet bağlantıları ve kanal arama
+
+### Davet bağlantısı (kanal + grup)
+Sohbet üst menüsü → **Kanal/grup ayarları** → *Davet bağlantısı*:
+- **Bağlantı oluştur** → 8 karakterlik kod üretir, `rebelzmedia://katil/<kod>`
+  bağlantısı **panoya kopyalanır** (WhatsApp/e-posta ile paylaşılabilir).
+- Altında geçerli kodlar listelenir: kopyala / iptal et.
+- Karşı taraf katılmak için **Kanallar → sağ üstteki kod düğmesi → Davet ile
+  katıl** alanına bağlantıyı ya da yalnızca kodu yazar. Katılan kişi otomatik
+  üye olur, üye sayacı artar; davet edilen kanal/grup listede görünür.
+
+Kayıt: `room_invites/{code}` → `roomId`, `createdBy`, `roomName`, `roomType`,
+`createdAt`. Kod, karıştırılabilen karakterler (0/O, 1/I) kullanılmadan
+`A-Z 2-9` alfabesinden üretilir.
+
+### Özel / herkese açık kanal
+Kanal sahibi ayarlarda **Özel kanal** anahtarını açar:
+- **Herkese açık** (varsayılan): Kanallar sekmesinde listelenir.
+- **Özel**: keşfette görünmez; yalnızca davet bağlantısı/kodu ile katılınır.
+  Üyesi olduğun özel kanallar listede kilit simgesiyle görünür.
+
+### Kanal arama
+Kanallar sekmesinde üstte **arama çubuğu** vardır; kanal adı ve açıklamasında
+aranır. Sonuç yoksa doğrudan "Kod ile katıl" önerilir.
+
+## 6. Kategori değiştirme (kaydırma)
+
+Sohbetler ekranında listeyi **sola/sağa kaydırarak** kategori değişir
+(Tümü ↔ Kişiler ↔ Gruplar). Alttaki noktalar hangi kategoride olduğunu
+gösterir, dokunarak da geçilebilir.
+
+## 7. Sohbet silme
 
 Sohbet balonuna **uzun bas** ya da satırdaki **⋮** menüsü:
 
@@ -46,7 +141,7 @@ Sohbet balonuna **uzun bas** ya da satırdaki **⋮** menüsü:
 | **Sadece benden kaldır** | `rooms.hiddenFor`'a uid eklenir. Karşı taraf sohbeti görmeye devam eder. Karşı taraf yeni mesaj yazarsa sohbet ikinizde de geri gelir. |
 | **Sohbeti tamamen sil** | Tüm mesajlar (300'erli partiler) ve oda dokümanı silinir. Doğrudan sohbette iki taraf da silebilir; eski grup sohbetlerinde yalnızca oluşturan. |
 
-## 3. Engelleme
+## 8. Engelleme
 
 - Sohbet ekranı sağ üst menü → **Kişiyi engelle** (onay istenir).
 - Engellenen kişi:
@@ -59,7 +154,7 @@ Sohbet balonuna **uzun bas** ya da satırdaki **⋮** menüsü:
 - Engeli kaldırdıktan sonra sohbeti yeniden açmak için *Yeni sohbet* →
   kullanıcı adını ara.
 
-## 4. Kurulum adımları (tek seferlik)
+## 9. Kurulum adımları (tek seferlik)
 
 1. `firestore.rules` dosyasını yayınlayın:
    `firebase deploy --only firestore:rules` (ya da konsoldan yapıştırıp
@@ -68,16 +163,21 @@ Sohbet balonuna **uzun bas** ya da satırdaki **⋮** menüsü:
    (`usernameLower`, `displayNameLower`) — **bileşik indeks gerekmez**.
    Sohbet listesi `memberIds array-contains` ile çekilip istemcide
    sıralanır; bu yüzden ek indeks de gerekmez.
-3. Profil fotoğrafı **bağlantı (URL)** ile eklenir. Galeriden yükleme
-   (Firebase Storage) sonraki sürüme bırakıldı; bunun için
-   `firebase_storage` + `image_picker` paketleri ve Storage kuralları
-   gerekir.
+3. Profil fotoğrafı **galeriden** seçilir (`image_picker`, ek izin gerekmez).
+   Storage kullanılmaz: seçilen görsel 320 px / %68 kaliteye küçültülüp
+   `data:image/…;base64,…` olarak `users/{uid}.photoUrl` alanına yazılır
+   (tipik 10-25 KB, üst sınır 400 000 karakter). Eski `https://` bağlantıları
+   da desteklenmeye devam eder.
 
-## 5. Bilinen sınırlar
+## 10. Bilinen sınırlar
 
 - Engelleme, istemci + kural düzeyinde uygulanır; engellenen kişi teknik
   olarak yeni bir hesapla yazabilir. Kalıcı engelleme için Cloud Functions
   ile sunucu tarafı kontrol gerekir.
 - Sohbet silme geri alınamaz (yedek yok).
-- Fotoğraf yükleme olmadığı için avatar seçenekleri emoji + renk paletiyle
-  sınırlıdır (fotoğraf bağlantısı verilirse o gösterilir).
+- Avatar base64 olarak dokümanda tutulduğu için çok büyük fotoğraflar
+  reddedilir; bu yüzden görsel otomatik küçültülür (320 px).
+- Mesaj dokümanlarına avatar **kopyalanmaz** (her mesaja ~20 KB yazmamak
+  için); mesaj satırlarındaki avatar ad/baş harften çizilir.
+- Kullanıcı adı kotası istemci transaction'ında + Firestore kurallarında
+  uygulanır; sunucu tarafı (Cloud Functions) zorlaması yoktur.

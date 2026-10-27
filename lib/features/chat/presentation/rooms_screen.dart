@@ -50,8 +50,12 @@ class _RoomsScreenState extends State<RoomsScreen> {
   late final Stream<List<ChatRoom>> _roomsStream = _repository.watchRooms();
 
   Stream<UserProfile?>? _profileStream;
-  bool _termsPromptShown = false;
+
+  /// Kategori sırası; sağa/sola kaydırma bu liste üzerinde ilerler.
+  static const List<String> _filters = ['all', 'dm', 'group'];
+
   String _filter = 'all';
+  bool _isAcceptingTerms = false;
 
   UserRepository? _resolveUsers() {
     if (widget.userRepository != null) return widget.userRepository;
@@ -189,9 +193,24 @@ class _RoomsScreenState extends State<RoomsScreen> {
     }
   }
 
-  Future<void> _promptTerms(UserProfile profile) async {
-    var accepted = false;
-    final result = await showDialog<bool>(
+  /// Kategoriyi bir sağa/sola kaydırır (FAB ve çiplerle aynı davranış).
+  void _shiftFilter(int delta) {
+    final index = _filters.indexOf(_filter);
+    final next = (index + delta).clamp(0, _filters.length - 1);
+    if (next == index) return;
+    setState(() => _filter = _filters[next]);
+  }
+
+  /// Koşullar onayı: tek dokunuşla metin açılır, onay kaydedilir.
+  ///
+  /// Onay `users/{uid}` dokümanına yazılır; akış güncellendiği anda
+  /// hatırlatma kendiliğinden kaybolur (bir daha çıkmaz).
+  Future<void> _acceptTerms() async {
+    final users = _users;
+    if (users == null || _isAcceptingTerms) return;
+
+    var checked = false;
+    final accepted = await showDialog<bool>(
       context: context,
       barrierDismissible: false,
       builder: (dialogContext) => StatefulBuilder(
@@ -203,15 +222,20 @@ class _RoomsScreenState extends State<RoomsScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 const Text(
-                  'Devam etmek için kullanım koşullarını ve gizlilik metnini '
-                  'kabul etmen gerekiyor. Onayın tarih ve saatle birlikte '
-                  'kaydedilir.',
+                  'Devam etmek için kullanım koşullarını ve gizlilik '
+                  'metnini kabul etmen gerekiyor. Onayın tarih ve saatle '
+                  'birlikte kaydedilir.',
                   style: TextStyle(fontSize: 13.5, height: 1.45),
                 ),
-                const SizedBox(height: 12),
+                const SizedBox(height: 10),
+                TextButton.icon(
+                  onPressed: () => showTermsSheet(context),
+                  icon: const Icon(Icons.description_outlined, size: 16),
+                  label: const Text('Metni aç'),
+                ),
                 TermsCheckbox(
-                  value: accepted,
-                  onChanged: (value) => setDialogState(() => accepted = value),
+                  value: checked,
+                  onChanged: (value) => setDialogState(() => checked = value),
                 ),
               ],
             ),
@@ -219,11 +243,11 @@ class _RoomsScreenState extends State<RoomsScreen> {
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(dialogContext, false),
-              child: const Text('Kabul etmiyorum'),
+              child: const Text('Vazgeç'),
             ),
             FilledButton(
               onPressed:
-                  accepted ? () => Navigator.pop(dialogContext, true) : null,
+                  checked ? () => Navigator.pop(dialogContext, true) : null,
               child: const Text('Kabul ediyorum'),
             ),
           ],
@@ -231,21 +255,32 @@ class _RoomsScreenState extends State<RoomsScreen> {
       ),
     );
 
-    if (result == true) {
-      try {
-        await _users?.acceptTerms();
-      } catch (e) {
-        if (!mounted) return;
+    if (accepted != true) {
+      if (!mounted) return;
+      if (accepted == false) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Onay kaydedilemedi: $e')),
+          const SnackBar(
+            content: Text('Koşulları kabul etmeden sohbetleri kullanamazsın.'),
+          ),
         );
       }
-    } else if (mounted) {
+      return;
+    }
+
+    setState(() => _isAcceptingTerms = true);
+    try {
+      await users.acceptTerms();
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Koşulları kabul etmeden sohbetleri kullanamazsın.'),
-        ),
+        const SnackBar(content: Text('Koşullar kabul edildi.')),
       );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Onay kaydedilemedi: $e')),
+      );
+    } finally {
+      if (mounted) setState(() => _isAcceptingTerms = false);
     }
   }
 
@@ -257,12 +292,6 @@ class _RoomsScreenState extends State<RoomsScreen> {
         final profile = profileSnapshot.data;
         final displayName = profile?.displayName ?? _currentUserName;
 
-        if (profile != null && !profile.termsAccepted && !_termsPromptShown) {
-          _termsPromptShown = true;
-          WidgetsBinding.instance.addPostFrameCallback((_) {
-            if (mounted) _promptTerms(profile);
-          });
-        }
 
         return Scaffold(
           body: SafeArea(
@@ -278,6 +307,11 @@ class _RoomsScreenState extends State<RoomsScreen> {
                   onSearch: _openNewChat,
                 ),
                 const VerifyEmailBanner(),
+                if (profile != null && !profile.termsAccepted)
+                  _TermsBanner(
+                    busy: _isAcceptingTerms,
+                    onAccept: _acceptTerms,
+                  ),
                 if (profile != null && profile.username.isEmpty)
                   _UsernamePrompt(onTap: () => _promptUsername(profile)),
                 Padding(
@@ -305,7 +339,15 @@ class _RoomsScreenState extends State<RoomsScreen> {
                   ),
                 ),
                 Expanded(
-                  child: StreamBuilder<List<ChatRoom>>(
+                  child: GestureDetector(
+                    behavior: HitTestBehavior.opaque,
+                    onHorizontalDragEnd: (details) {
+                      final velocity = details.primaryVelocity ?? 0;
+                      if (velocity.abs() < 200) return;
+                      // Sağa kaydırma (pozitif) → önceki kategori.
+                      _shiftFilter(velocity > 0 ? -1 : 1);
+                    },
+                    child: StreamBuilder<List<ChatRoom>>(
                     stream: _roomsStream,
                     builder: (context, snapshot) {
                       if (snapshot.hasError) {
@@ -353,7 +395,13 @@ class _RoomsScreenState extends State<RoomsScreen> {
                         },
                       );
                     },
+                    ),
                   ),
+                ),
+                _FilterDots(
+                  count: _filters.length,
+                  index: _filters.indexOf(_filter),
+                  onSelect: (index) => setState(() => _filter = _filters[index]),
                 ),
               ],
             ),
@@ -370,6 +418,112 @@ class _RoomsScreenState extends State<RoomsScreen> {
           ),
         );
       },
+    );
+  }
+}
+
+/// Koşullar onaylanmadıysa görünen tek satırlık hatırlatma.
+///
+/// Onay kaydedildiği anda `watchMyProfile` akışı güncellenir ve bu kart
+/// kendiliğinden kaybolur — bir daha gösterilmez.
+class _TermsBanner extends StatelessWidget {
+  const _TermsBanner({required this.busy, required this.onAccept});
+
+  final bool busy;
+  final VoidCallback onAccept;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.fromLTRB(16, 2, 16, 6),
+      padding: const EdgeInsets.fromLTRB(14, 10, 10, 10),
+      decoration: BoxDecoration(
+        color: context.colors.primaryContainer.withValues(alpha: 0.55),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(
+          color: context.colors.primary.withValues(alpha: 0.35),
+        ),
+      ),
+      child: Row(
+        children: [
+          Icon(
+            Icons.gavel_rounded,
+            size: 17,
+            color: context.colors.primary,
+          ),
+          const SizedBox(width: 9),
+          Expanded(
+            child: Text(
+              'Kullanım koşulları onayı bekliyor.',
+              style: TextStyle(
+                fontSize: 12.5,
+                height: 1.3,
+                color: context.colors.onSurface,
+              ),
+            ),
+          ),
+          const SizedBox(width: 6),
+          FilledButton(
+            onPressed: busy ? null : onAccept,
+            style: FilledButton.styleFrom(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+              minimumSize: const Size(0, 34),
+              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(10),
+              ),
+            ),
+            child: busy
+                ? const SizedBox(
+                    height: 14,
+                    width: 14,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Text('Kabul et', style: TextStyle(fontSize: 12.5)),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Kategori noktaları: kaydırmanın hangi kategoriye geçtiğini gösterir.
+class _FilterDots extends StatelessWidget {
+  const _FilterDots({
+    required this.count,
+    required this.index,
+    required this.onSelect,
+  });
+
+  final int count;
+  final int index;
+  final ValueChanged<int> onSelect;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(top: 8, bottom: 6),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          for (var i = 0; i < count; i++)
+            GestureDetector(
+              onTap: () => onSelect(i),
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 180),
+                margin: const EdgeInsets.symmetric(horizontal: 3),
+                height: 5,
+                width: i == index ? 18 : 5,
+                decoration: BoxDecoration(
+                  color: i == index
+                      ? context.colors.primary
+                      : context.line,
+                  borderRadius: BorderRadius.circular(3),
+                ),
+              ),
+            ),
+        ],
+      ),
     );
   }
 }

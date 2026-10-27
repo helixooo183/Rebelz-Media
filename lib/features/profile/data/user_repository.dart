@@ -15,6 +15,11 @@ class UserRepository {
   final FirebaseFirestore _db;
   final FirebaseAuth _auth;
 
+  /// Avatar alanının (`photoUrl`) üst sınırı: base64 data URI ~390 KB.
+  /// Galeriden seçilen fotoğraf 320 px'e küçültüldüğü için tipik değer
+  /// 10-25 KB; sınır yalnızca yanlış kullanımı engeller.
+  static const int maxPhotoLength = 400000;
+
   CollectionReference<Map<String, dynamic>> get _users =>
       _db.collection('users');
 
@@ -124,13 +129,50 @@ class UserRepository {
     final usernameError = Username.validate(normalizedUsername);
     if (usernameError != null) throw ProfileException(usernameError);
 
+    final trimmedPhoto = photoUrl.trim();
+    if (trimmedPhoto.length > maxPhotoLength) {
+      throw const ProfileException(
+        'Profil fotoğrafı çok büyük. Galeriden daha küçük bir fotoğraf seç.',
+      );
+    }
+
     final userRef = _users.doc(uid);
     final usernameRef = _usernames.doc(normalizedUsername);
 
     await _db.runTransaction((transaction) async {
       final currentUserDoc = await transaction.get(userRef);
+      final currentData = currentUserDoc.data() ?? const <String, dynamic>{};
       final previousUsername =
-          (currentUserDoc.data()?['usernameLower'] as String?)?.trim() ?? '';
+          (currentData['usernameLower'] as String?)?.trim() ?? '';
+
+      // ---- kullanıcı adı değişiklik kotası -------------------------------
+      // 30 günlük dönemde en fazla 2 değişiklik. İlk kez ad almak (henüz ad
+      // yokken seçmek) hak harcamaz.
+      final isUsernameChange =
+          previousUsername.isNotEmpty && previousUsername != normalizedUsername;
+
+      var usedChanges = (currentData['usernameChanges'] as num?)?.toInt() ?? 0;
+      var windowStart =
+          (currentData['usernameWindowStart'] as Timestamp?)?.toDate();
+
+      if (isUsernameChange) {
+        final now = DateTime.now();
+        final windowExpired = windowStart == null ||
+            now.difference(windowStart).inDays >= UsernameChangePolicy.windowDays;
+        if (windowExpired) {
+          usedChanges = 0;
+          windowStart = now;
+        }
+
+        if (usedChanges >= UsernameChangePolicy.maxChanges) {
+          final unlock = UsernameChangePolicy.windowEnd(windowStart);
+          throw ProfileException(
+            'Kullanıcı adını ${UsernameChangePolicy.maxChanges} kez değiştirdin. '
+            'Yeni hak ${UsernameChangePolicy.waitText(unlock)} açılır.',
+          );
+        }
+        usedChanges += 1;
+      }
 
       final claim = await transaction.get(usernameRef);
       if (claim.exists) {
@@ -150,17 +192,28 @@ class UserRepository {
         'createdAt': FieldValue.serverTimestamp(),
       }, SetOptions(merge: true));
 
-      transaction.set(userRef, {
+      final profileData = <String, dynamic>{
         'displayName': trimmedName,
         'displayNameLower': trimmedName.toLowerCase(),
         'username': normalizedUsername,
         'usernameLower': normalizedUsername,
         'bio': bio.trim(),
-        'photoUrl': photoUrl.trim(),
+        'photoUrl': trimmedPhoto,
         'avatarEmoji': avatarEmoji.trim(),
         'avatarColor': avatarColor,
         'lastSeenAt': FieldValue.serverTimestamp(),
-      }, SetOptions(merge: true));
+      };
+
+      // Kota alanları yalnızca gerçek bir değişiklikte yazılır; böylece adı
+      // aynı bırakan kayıtlar sayacı/penceresi bozmaz.
+      if (isUsernameChange) {
+        profileData['usernameChanges'] = usedChanges;
+        if (windowStart != null) {
+          profileData['usernameWindowStart'] = Timestamp.fromDate(windowStart);
+        }
+      }
+
+      transaction.set(userRef, profileData, SetOptions(merge: true));
     });
 
     final user = _auth.currentUser;
@@ -198,15 +251,43 @@ class UserRepository {
   Future<void> acceptTerms({String version = LegalTexts.version}) async {
     final uid = _requireUid();
     final user = _auth.currentUser;
-    final batch = _db.batch();
+    final docRef = _users.doc(uid);
 
-    batch.set(_users.doc(uid), {
+    // Doküman henüz yoksa güvenlik kuralının `create` dalı çalışır; o dal
+    // `displayName` gibi zorunlu alanları da ister. Bu yüzden ilk kayıtta
+    // profil alanları da yazılır — aksi hâlde onay "hiç kaydedilmemiş" gibi
+    // görünüyordu (kullanıcı kabul etse bile hatırlatma tekrar çıkıyordu).
+    var exists = false;
+    try {
+      exists = (await docRef.get()).exists;
+    } catch (_) {
+      exists = false;
+    }
+
+    final base = <String, dynamic>{
       'termsAcceptedAt': FieldValue.serverTimestamp(),
       'termsVersion': version,
       'lastSeenAt': FieldValue.serverTimestamp(),
-    }, SetOptions(merge: true));
+    };
 
-    batch.set(_users.doc(uid).collection('consents').doc(), {
+    if (!exists) {
+      final name = user?.displayName?.trim().isNotEmpty == true
+          ? user!.displayName!.trim()
+          : (user?.email?.split('@').first ?? 'Kullanıcı');
+      base.addAll({
+        'displayName': name,
+        'displayNameLower': name.toLowerCase(),
+        'email': user?.email ?? '',
+        'emailVerified': user?.emailVerified ?? false,
+        'createdAt': FieldValue.serverTimestamp(),
+      });
+    }
+
+    final batch = _db.batch();
+    batch.set(docRef, base, SetOptions(merge: true));
+
+    // Değiştirilemez kanıt kaydı: uid, e-posta, sürüm, cihaz, zaman.
+    batch.set(docRef.collection('consents').doc(), {
       'uid': uid,
       'email': user?.email ?? '',
       'version': version,
