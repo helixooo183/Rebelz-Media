@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import '../../../core/services/services.dart';
@@ -39,16 +41,30 @@ class _NewChatSheetState extends State<NewChatSheet> {
   bool _hasSearched = false;
   String? _error;
 
+  Timer? _debounce;
+
   @override
   void initState() {
     super.initState();
+    _controller.addListener(_onQueryChanged);
     _users.fetchBlockedUids().then((value) {
       if (mounted) setState(() => _blocked = value);
     });
   }
 
+  /// Yazarken arar; her tuşta istek atmasın diye 250 ms beklenir.
+  void _onQueryChanged() {
+    _debounce?.cancel();
+    _debounce = Timer(
+      const Duration(milliseconds: 250),
+      () => _search(_controller.text),
+    );
+  }
+
   @override
   void dispose() {
+    _debounce?.cancel();
+    _controller.removeListener(_onQueryChanged);
     _controller.dispose();
     super.dispose();
   }
@@ -154,7 +170,10 @@ class _NewChatSheetState extends State<NewChatSheet> {
                 hintText: 'kullanıcı adı (ör. ayse_y)',
                 prefixIcon: Icons.alternate_email,
                 textInputAction: TextInputAction.search,
-                onSubmitted: _search,
+                onSubmitted: (value) {
+                  _debounce?.cancel();
+                  _search(value);
+                },
               ),
             ),
             const SizedBox(height: 8),

@@ -1,0 +1,94 @@
+name: Ekran görüntüleri
+
+# Uygulamanın ekranlarını Firebase olmadan (sahte veriyle) PNG'ye çizer.
+#
+# - test_preview/preview_test.dart golden testlerini --update-goldens ile
+#   çalıştırır (gerçek Flutter render'ı, 390x844 @3x).
+# - Çıktılar test_preview/goldens/ ve docs/ekranlar/ altına yazılır.
+# - Değişiklik varsa bot hesabıyla commit edilir; böylece görseller repoda
+#   görünür ve doğrudan indirilebilir.
+# - Ayrıca artifact olarak yüklenir.
+#
+# Not: commit yalnızca docs/** ve test_preview/goldens/** dokunur; APK
+# workflow'unun paths filtresine girmediği için yeni derleme tetiklemez.
+
+run-name: "Ekran görüntüleri · ${{ github.ref_name }}"
+
+on:
+  push:
+    # 'arena/**' = Arena ajan dalları: PR birleşmeden önce de çizilsin.
+    branches: [main, 'arena/**']
+    paths:
+      - 'lib/**'
+      - 'test_preview/preview_test.dart'
+      - 'pubspec.yaml'
+      - '.github/workflows/screenshots.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: screenshots-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  render:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Flutter 3.35.1
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.35.1'
+          channel: stable
+          cache: true
+
+      - name: Bağımlılıklar
+        run: flutter pub get
+
+      - name: Ekranları çiz
+        run: |
+          set -o pipefail
+          flutter test test_preview/preview_test.dart --update-goldens 2>&1 | tee /tmp/render.log
+
+      # Hata ayrıntısı annotation olarak yayınlanır (iş logları herkese açık
+      # olmadığı için sebep tek bakışta görünsün).
+      - name: Hata ayrıntısı
+        if: failure()
+        run: |
+          [ -f /tmp/render.log ] || exit 0
+          msg=$(grep -E "Error|error|Exception|Expected|failed|Failed|Test failed" /tmp/render.log \
+            | head -25 | sed 's/^ *//' | tr '\n' '\036' | sed 's/\x1e/%0A/g')
+          [ -n "$msg" ] && echo "::error title=render::${msg}"
+          echo "### ❌ Render" >> $GITHUB_STEP_SUMMARY
+          tail -40 /tmp/render.log >> $GITHUB_STEP_SUMMARY 2>/dev/null || true
+
+      - name: docs/ekranlar'ı güncelle
+        run: |
+          mkdir -p docs/ekranlar
+          rm -f docs/ekranlar/*.png
+          cp test_preview/goldens/*.png docs/ekranlar/
+          ls -la docs/ekranlar
+
+      - name: Artifact yükle
+        uses: actions/upload-artifact@v4
+        with:
+          name: ekran-goruntuleri
+          path: test_preview/goldens/*.png
+          if-no-files-found: error
+
+      - name: Değişiklikleri commit et
+        run: |
+          if [ -z "$(git status --porcelain docs/ekranlar test_preview/goldens)" ]; then
+            echo "Görseller değişmedi."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add docs/ekranlar test_preview/goldens
+          git commit -m "Ekran görüntülerini güncelle (CI)"
+          git push

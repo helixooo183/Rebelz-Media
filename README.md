@@ -21,7 +21,13 @@ Ayrıntılar: [docs/eposta-dogrulama-ve-onay.md](docs/eposta-dogrulama-ve-onay.m
 
 ![Ekranlar](docs/screens.png)
 
-> Sıra: splash · giriş · kayıt · sohbet listesi · boş durum · sohbet · kurulum rehberi
+> Sıra (üst sıra): açılış · giriş · kayıt + koşul onayı · sohbetler · boş durum · sohbet · kurulum
+> Sıra (alt sıra): profil · profili düzenle · yeni sohbet (kullanıcı adı) · engellenenler · kullanım koşulları · engelli sohbet
+>
+> Görseller CI'da gerçek Flutter render'ıyla üretilir
+> (`Ekran görüntüleri` workflow'u → `test_preview/preview_test.dart --update-goldens`)
+> ve tek tek `docs/ekranlar/` altına yazılır. Emoji'ler CI'da yazı tipi
+> olmadığı için kutu görünebilir; cihazda normal emoji olarak çizilir.
 
 | | |
 |---|---|
