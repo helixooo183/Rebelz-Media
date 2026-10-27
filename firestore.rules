@@ -114,6 +114,20 @@ service cloud.firestore {
         allow update, delete: if false;
       }
 
+      // ------------------------------------------- benden sil (mesaj gizleme)
+      // "Benden sil" yalnızca sahibinin gördüğü bir işarettir; mesaj diğer
+      // üyeler için silinmez (bkz. ChatRepository.hideMessageForMe).
+      match /hiddenMessages/{hiddenId} {
+        allow read, delete: if isOwner(userId);
+        allow create: if isOwner(userId)
+          && isNonEmptyString(request.resource.data.roomId, 128)
+          && isNonEmptyString(request.resource.data.messageId, 128)
+          && request.resource.data.keys().hasOnly([
+               'roomId', 'messageId', 'createdAt',
+             ]);
+        allow update: if false;
+      }
+
       // --------------------------------------------------------- engelleme
       // Herkes okuyabilir: gönderen "karşı taraf beni engelledi mi?"
       // kontrolünü ancak böyle yapabilir (mesaj kuralı da bunu kullanır).

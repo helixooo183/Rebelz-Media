@@ -192,7 +192,32 @@ Sohbetler ekranında listeyi **sola/sağa kaydırarak** kategori değişir
 (Tümü ↔ Kişiler ↔ Gruplar). Alttaki noktalar hangi kategoride olduğunu
 gösterir, dokunarak da geçilebilir.
 
-## 9. Sohbet silme
+## 9. Mesaj silme ve fotoğraf görüntüleme
+
+Bir mesaja (metin, fotoğraf veya sesli mesaj) **uzun bas** → işlem menüsü:
+
+| Seçenek | Ne yapar | Kim görür |
+|---|---|---|
+| **Benden sil** | Mesajı yalnızca sende gizler | Sadece sen |
+| **Herkesten sil** | Mesaj tüm üyelerden kaldırılır | Herkes |
+| **Mesajı şikayet et** | Şikayet formu (başkasının mesajı) | Yönetici paneli |
+
+- **Benden sil** `users/{uid}/hiddenMessages/{roomId__messageId}` kaydı oluşturur;
+  sohbet akışı bu kimlikleri filtreler. Başka üye etkilenmez, kural gereği
+  kimse bu kaydı okuyamaz.
+- **Herkesten sil** kendi mesajında içeriği temizler ve "Bu mesaj silindi"
+  izi bırakır. Kanal/grupta `modsDeleteMessages` izni açıksa **sahip ve
+  moderatörler** başkasının mesajını da silebilir (doküman kaldırılır).
+- Onay penceresi vardır: yanlışlıkla silme olmaz.
+
+**Fotoğraf görüntüleme:** fotoğrafa dokun → tam ekran siyah görüntüleyici
+(pinch ile 1–5x yakınlaştırma, dokununca üst bar gizlenir, ✕ ile kapanır).
+
+**Saat/okundu bilgisi** her balonda tek yerde: balonun alt satırında. (Önceden
+fotoğraflarda hem görsel üzerinde hem altında ikinci bir saat+✓✓ vardı;
+kaldırıldı.)
+
+## 10. Sohbet silme
 
 Sohbet balonuna **uzun bas** ya da satırdaki **⋮** menüsü:
 
@@ -201,7 +226,7 @@ Sohbet balonuna **uzun bas** ya da satırdaki **⋮** menüsü:
 | **Sadece benden kaldır** | `rooms.hiddenFor`'a uid eklenir. Karşı taraf sohbeti görmeye devam eder. Karşı taraf yeni mesaj yazarsa sohbet ikinizde de geri gelir. |
 | **Sohbeti tamamen sil** | Tüm mesajlar (300'erli partiler) ve oda dokümanı silinir. Doğrudan sohbette iki taraf da silebilir; eski grup sohbetlerinde yalnızca oluşturan. |
 
-## 10. Engelleme
+## 11. Engelleme
 
 - Sohbet ekranı sağ üst menü → **Kişiyi engelle** (onay istenir).
 - Engellenen kişi:
@@ -214,7 +239,7 @@ Sohbet balonuna **uzun bas** ya da satırdaki **⋮** menüsü:
 - Engeli kaldırdıktan sonra sohbeti yeniden açmak için *Yeni sohbet* →
   kullanıcı adını ara.
 
-## 11. Kurulum adımları (tek seferlik)
+## 12. Kurulum adımları (tek seferlik)
 
 1. `firestore.rules` dosyasını yayınlayın:
    `firebase deploy --only firestore:rules` (ya da konsoldan yapıştırıp
@@ -229,7 +254,7 @@ Sohbet balonuna **uzun bas** ya da satırdaki **⋮** menüsü:
    (tipik 10-25 KB, üst sınır 400 000 karakter). Eski `https://` bağlantıları
    da desteklenmeye devam eder.
 
-## 12. Bilinen sınırlar
+## 13. Bilinen sınırlar
 
 - Engelleme, istemci + kural düzeyinde uygulanır; engellenen kişi teknik
   olarak yeni bir hesapla yazabilir. Kalıcı engelleme için Cloud Functions

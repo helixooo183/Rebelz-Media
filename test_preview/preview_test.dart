@@ -179,6 +179,16 @@ class _FakeChatRepository implements ChatRepository {
   Future<void> setRoomPhoto(String roomId, String dataUri) async {}
 
   @override
+  Future<void> hideMessageForMe(String roomId, String messageId) async {}
+
+  @override
+  Stream<Set<String>> watchHiddenMessageIds(String roomId) =>
+      Stream<Set<String>>.value(const <String>{});
+
+  @override
+  Future<void> deleteMessageAsModerator(String roomId, String messageId) async {}
+
+  @override
   Future<void> setPermission(
     String roomId,
     String key, {
@@ -681,6 +691,32 @@ void main() {
     await expectLater(
       find.byType(MaterialApp),
       matchesGoldenFile('goldens/06_chat.png'),
+    );
+  });
+
+  testWidgets('20 mesaj işlemleri menüsü', (tester) async {
+    await tester.pumpWidget(
+      _wrap(
+        ChatScreen(
+          roomId: 'r1',
+          roomName: 'Tasarım Ekibi',
+          repository: _FakeChatRepository(rooms: rooms, messages: messages),
+          userRepository: users,
+          currentUserId: 'u1',
+        ),
+      ),
+    );
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 50));
+
+    // Kendi metin mesajına uzun bas → alt menü açılır.
+    final own = find.text('Süper! Yarın giriş ekranını da bitiriyorum.').first;
+    await tester.longPress(own);
+    await tester.pumpAndSettle();
+
+    await expectLater(
+      find.byType(MaterialApp),
+      matchesGoldenFile('goldens/20_message_actions.png'),
     );
   });
 
