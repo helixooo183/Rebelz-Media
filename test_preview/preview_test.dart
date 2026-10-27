@@ -35,17 +35,36 @@ class _FakeChatRepository implements ChatRepository {
   Stream<List<ChatRoom>> watchRooms() => Stream.value(rooms);
 
   @override
+  Stream<ChatRoom?> watchRoom(String roomId) {
+    for (final room in rooms) {
+      if (room.id == roomId) return Stream.value(room);
+    }
+    return Stream.value(null);
+  }
+
+  @override
   Stream<List<ChatMessage>> watchMessages(String roomId) =>
       Stream.value(messages);
 
   @override
-  Future<String> createRoom(String name) async => 'fake';
+  Future<String> openDirectChat({
+    required String peerUid,
+    required String peerName,
+    String peerPhotoUrl = '',
+  }) async =>
+      'dm_fake';
 
   @override
-  Future<void> sendMessage({
-    required String roomId,
-    required String text,
-  }) async {}
+  Future<void> sendMessage(String roomId, String text) async {}
+
+  @override
+  Future<bool> hasBlocked(String otherUid) async => false;
+
+  @override
+  Future<void> hideChat(String roomId) async {}
+
+  @override
+  Future<void> deleteChat(String roomId) async {}
 }
 
 Future<void> _loadFonts() async {

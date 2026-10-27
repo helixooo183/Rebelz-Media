@@ -5,6 +5,20 @@
 Koyu temalı bir sohbet uygulaması. Backend: **Firebase Authentication
 (Google Sign-In + e-posta/şifre)** ve **Cloud Firestore**.
 
+**Öne çıkanlar (v0.2.0)**
+
+- Kullanıcı adıyla **kişi arama** → doğrudan sohbet (oda adı sorulmaz)
+- **Profil düzenleme**: görünen ad, `@kullanıcı adı`, hakkında, avatar
+  (emoji + renk) ve fotoğraf bağlantısı
+- **Sohbet silme**: sadece benden kaldır ya da tüm mesajlarla kalıcı sil
+- **Kişi engelleme / engel kaldırma**
+- **E-posta doğrulama**: kayıtta otomatik gönderim + "tekrar gönder / doğruladım"
+- **Kullanım koşulu onayı**: kayıtta zorunlu onay kutusu; onay zaman damgası
+  ve sürümü değiştirilemez kayıt olarak saklanır
+
+Ayrıntılar: [docs/eposta-dogrulama-ve-onay.md](docs/eposta-dogrulama-ve-onay.md) ·
+[docs/profil-sohbet-engelleme.md](docs/profil-sohbet-engelleme.md)
+
 ![Ekranlar](docs/screens.png)
 
 > Sıra: splash · giriş · kayıt · sohbet listesi · boş durum · sohbet · kurulum rehberi
@@ -71,8 +85,8 @@ flutter build apk --release   # build/app/outputs/flutter-apk/app-release.apk
 │   │   └── widgets/                  # AppLogo, GoogleLogo, GoogleSignInButton, ...
 │   └── features/
 │       ├── auth/presentation/        # splash, login, register
-│       ├── chat/{data,domain,presentation}
-│       ├── profile/
+│       ├── chat/{data,domain,presentation}   # repository, modeller, sohbet ekranları
+│       ├── profile/{data,domain,presentation} # profil, kullanıcı adı, koşullar, engelleme
 │       └── setup/                    # anahtarlar eksikse rehber ekranı
 ├── android/                          # com.rebelz.media (google-services.json dahil)
 ├── ios/  web/
@@ -217,23 +231,32 @@ Windows: `%USERPROFILE%\.android\debug.keystore`. Keystore yoksa bir kez
 
 ```
 users/{uid}
-  displayName, email, photoUrl, createdAt, lastSeenAt
+  displayName, displayNameLower, username, usernameLower, bio,
+  photoUrl, avatarEmoji, avatarColor, email, emailVerified,
+  termsVersion, termsAcceptedAt, createdAt, lastSeenAt
+  ├─ consents/{id}    uid, email, version, accepted, platform, acceptedAt
+  └─ blocked/{uid}    blockedUid, createdAt
+
+usernames/{usernameLower}      uid, usernameLower, createdAt   (tekillik kilidi)
 
 rooms/{roomId}
-  name, createdBy, memberIds[], lastMessage, lastMessageAt, createdAt
+  name, photoUrl, type ('dm'|'group'), createdBy, memberIds[],
+  lastMessage, lastMessageAt, hiddenFor[], memberNames, createdAt
   └─ messages/{messageId}
-       senderId, senderName, text, createdAt
+       senderId, senderName, senderPhotoUrl, text, type, createdAt
 ```
 
 Kurallar `hasOnly` ile alan beyaz listesi uygular: `users` güncellemesinde
-yalnızca `displayName`, `photoUrl`, `lastSeenAt` değişebilir; mesajlar
-oluşturulduktan sonra değiştirilemez/silinemez.
+yalnızca profil alanları değişebilir; `consents` kayıtları oluşturulduktan
+sonra değiştirilemez/silinemez (kanıt); mesaj içeriği düzenlenemez, yalnızca
+sohbet silme akışında silinebilir. Mesaj yazımı, karşı taraf sizi
+engellediyse kural tarafından reddedilir.
 
 ## Test ve önizleme
 
 ```bash
 flutter analyze    # 0 issue
-flutter test       # 6 test (Google butonu, avatar, empty state, model)
+flutter test       # birim + widget testleri (profil, kullanıcı adı, koşul onayı)
 flutter test test_preview/preview_test.dart --update-goldens   # docs/screens.png kaynağı
 ```
 
@@ -260,9 +283,10 @@ flutter test test_preview/preview_test.dart --update-goldens   # docs/screens.pn
 - [x] Release imzalamayı `build.gradle.kts`'e bağlama (`key.properties` / `KEYSTORE_*`)
 - [ ] Secret'ları GitHub'a tanımlama + Play Store'a yükleme (`.aab`, Play App Signing)
 - [ ] iOS uygulamasını kaydetme (`GoogleService-Info.plist`, `REVERSED_CLIENT_ID`)
-- [ ] `users` koleksiyonundan fotoğraf gösterimi (`photoUrl` zaten yazılıyor)
+- [x] `users` koleksiyonundan fotoğraf gösterimi (avatar `photoUrl` destekler)
 - [ ] Mesaj sayfalama (şu an son 100 mesaj), okundu bilgisi, FCM bildirimleri
-- [ ] Sohbet odalarını `memberIds` ile sınırlama (şu an oturum açan tüm odaları görür)
+- [x] Sohbet odalarını `memberIds` ile sınırlama
+- [ ] Galeriden fotoğraf yükleme (Firebase Storage + `image_picker`)
 
 ---
 

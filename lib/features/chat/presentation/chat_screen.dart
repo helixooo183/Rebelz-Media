@@ -5,8 +5,10 @@ import '../../../core/services/services.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/widgets/empty_state.dart';
 import '../../../core/widgets/user_avatar.dart';
+import '../../profile/data/user_repository.dart';
 import '../data/chat_repository.dart';
 import '../domain/models/chat_message.dart';
+import '../domain/models/chat_room.dart';
 
 /// Tek bir sohbet odasının mesaj ekranı.
 class ChatScreen extends StatefulWidget {
@@ -37,12 +39,155 @@ class _ChatScreenState extends State<ChatScreen> {
       widget.repository ?? chatRepositoryInstance;
 
   late final String? _myUid =
-      widget.currentUserId ?? authServiceInstance.currentUser?.uid;
+      widget.currentUserId ?? currentUserIdOrNull;
 
   late final Stream<List<ChatMessage>> _messagesStream =
       _repository.watchMessages(widget.roomId);
 
+  late final Stream<ChatRoom?> _roomStream = _repository.watchRoom(widget.roomId);
+
+  UserRepository? _users;
+  bool _iBlockedPeer = false;
+  bool _isBusy = false;
   bool _isSending = false;
+
+  /// Karşı tarafın uid'si (yalnızca doğrudan sohbetlerde).
+  String? _peerUid;
+
+  UserRepository? get _userRepo {
+    if (_users != null) return _users;
+    try {
+      return _users = userRepositoryInstance;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _loadBlockState();
+  }
+
+  Future<void> _loadBlockState() async {
+    final repo = _userRepo;
+    if (repo == null || _myUid == null) return;
+    try {
+      final room = await _repository.watchRoom(widget.roomId).first;
+      final peer = room?.peerUid(_myUid);
+      if (peer == null) return;
+      final blocked = await repo.fetchBlockedUids();
+      if (!mounted) return;
+      setState(() {
+        _peerUid = peer;
+        _iBlockedPeer = blocked.contains(peer);
+      });
+    } catch (_) {
+      // Engel durumu okunamazsa sohbet normal çalışır.
+    }
+  }
+
+  Future<void> _toggleBlock({required bool block}) async {
+    final repo = _userRepo;
+    if (repo == null || _peerUid == null) return;
+
+    if (block) {
+      final confirmed = await showDialog<bool>(
+        context: context,
+        builder: (dialogContext) => AlertDialog(
+          backgroundColor: AppColors.surface,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(20),
+          ),
+          title: const Text('Kişiyi engelle'),
+          content: Text(
+            '${widget.roomName} senden mesaj gönderemez ve sohbetiniz '
+            'listenden kaldırılır. Engeli istediğin zaman kaldırabilirsin.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext, false),
+              child: const Text('Vazgeç'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(dialogContext, true),
+              style: FilledButton.styleFrom(backgroundColor: AppColors.danger),
+              child: const Text('Engelle'),
+            ),
+          ],
+        ),
+      );
+      if (confirmed != true || !mounted) return;
+    }
+
+    setState(() => _isBusy = true);
+    try {
+      if (block) {
+        await repo.blockUser(_peerUid!);
+        await _repository.hideChat(widget.roomId);
+      } else {
+        await repo.unblockUser(_peerUid!);
+      }
+      if (!mounted) return;
+      setState(() => _iBlockedPeer = block);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            block ? 'Kişi engellendi.' : 'Engel kaldırıldı.',
+          ),
+        ),
+      );
+      if (block) Navigator.of(context).maybePop();
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('İşlem tamamlanamadı: $e')),
+      );
+    } finally {
+      if (mounted) setState(() => _isBusy = false);
+    }
+  }
+
+  Future<void> _deleteChat() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        backgroundColor: AppColors.surface,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: const Text('Sohbet silinsin mi?'),
+        content: const Text(
+          'Bu sohbet ve tüm mesajları kalıcı olarak silinir. '
+          'Bu işlem geri alınamaz.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('Vazgeç'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            style: FilledButton.styleFrom(backgroundColor: AppColors.danger),
+            child: const Text('Sil'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+
+    setState(() => _isBusy = true);
+    try {
+      await _repository.deleteChat(widget.roomId);
+      if (!mounted) return;
+      Navigator.of(context).maybePop();
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Sohbet silinemedi: $e')),
+      );
+    } finally {
+      if (mounted) setState(() => _isBusy = false);
+    }
+  }
 
   @override
   void dispose() {
@@ -59,10 +204,7 @@ class _ChatScreenState extends State<ChatScreen> {
     _messageController.clear();
 
     try {
-      await _repository.sendMessage(
-        roomId: widget.roomId,
-        text: text,
-      );
+      await _repository.sendMessage(widget.roomId, text);
       if (_scrollController.hasClients) {
         await _scrollController.animateTo(
           0,
@@ -70,11 +212,15 @@ class _ChatScreenState extends State<ChatScreen> {
           curve: Curves.easeOut,
         );
       }
-    } catch (_) {
+    } catch (e) {
       if (!mounted) return;
       _messageController.text = text;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Mesaj gönderilemedi.')),
+        SnackBar(
+          content: Text(
+            e is ChatException ? e.message : 'Mesaj gönderilemedi: $e',
+          ),
+        ),
       );
     } finally {
       if (mounted) setState(() => _isSending = false);
@@ -86,40 +232,97 @@ class _ChatScreenState extends State<ChatScreen> {
     return Scaffold(
       appBar: AppBar(
         titleSpacing: 0,
-        title: Row(
-          children: [
-            UserAvatar(name: widget.roomName, size: 38),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisSize: MainAxisSize.min,
+        title: StreamBuilder<ChatRoom?>(
+          stream: _roomStream,
+          builder: (context, roomSnapshot) {
+            final room = roomSnapshot.data;
+            final name = room?.name.isNotEmpty == true ? room!.name : widget.roomName;
+            return Row(
+              children: [
+                UserAvatar(name: name, size: 38, photoUrl: room?.photoUrl),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        name,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          fontSize: 17,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      Text(
+                        _iBlockedPeer ? 'engellendi' : 'sohbet',
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w400,
+                          color: _iBlockedPeer
+                              ? AppColors.danger
+                              : AppColors.success,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            );
+          },
+        ),
+        actions: [
+          if (_peerUid != null)
+            PopupMenuButton<String>(
+              enabled: !_isBusy,
+              tooltip: 'Sohbet seçenekleri',
+              onSelected: (value) {
+                if (value == 'block') {
+                  _toggleBlock(block: !_iBlockedPeer);
+                } else if (value == 'delete') {
+                  _deleteChat();
+                }
+              },
+              itemBuilder: (_) => [
+                PopupMenuItem(
+                  value: 'block',
+                  child: Text(
+                    _iBlockedPeer ? 'Engeli kaldır' : 'Kişiyi engelle',
+                  ),
+                ),
+                const PopupMenuItem(
+                  value: 'delete',
+                  child: Text('Sohbeti sil'),
+                ),
+              ],
+            ),
+        ],
+      ),
+      body: Column(
+        children: [
+          if (_iBlockedPeer)
+            Container(
+              width: double.infinity,
+              color: AppColors.danger.withValues(alpha: 0.12),
+              padding: const EdgeInsets.fromLTRB(16, 10, 16, 10),
+              child: Row(
                 children: [
-                  Text(
-                    widget.roomName,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      fontSize: 17,
-                      fontWeight: FontWeight.w600,
+                  const Icon(Icons.block, size: 18, color: AppColors.danger),
+                  const SizedBox(width: 10),
+                  const Expanded(
+                    child: Text(
+                      'Bu kişiyi engelledin. Mesaj gönderemezsin.',
+                      style: TextStyle(fontSize: 12.5),
                     ),
                   ),
-                  const Text(
-                    'çevrimiçi',
-                    style: TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w400,
-                      color: AppColors.success,
-                    ),
+                  TextButton(
+                    onPressed: _isBusy ? null : () => _toggleBlock(block: false),
+                    child: const Text('Engeli kaldır'),
                   ),
                 ],
               ),
             ),
-          ],
-        ),
-      ),
-      body: Column(
-        children: [
           Expanded(
             child: StreamBuilder<List<ChatMessage>>(
               stream: _messagesStream,
@@ -172,6 +375,7 @@ class _ChatScreenState extends State<ChatScreen> {
             controller: _messageController,
             isSending: _isSending,
             onSend: _send,
+            enabled: !_iBlockedPeer,
           ),
         ],
       ),
@@ -280,11 +484,13 @@ class _MessageComposer extends StatelessWidget {
     required this.controller,
     required this.isSending,
     required this.onSend,
+    this.enabled = true,
   });
 
   final TextEditingController controller;
   final bool isSending;
   final VoidCallback onSend;
+  final bool enabled;
 
   @override
   Widget build(BuildContext context) {
@@ -303,13 +509,15 @@ class _MessageComposer extends StatelessWidget {
               Expanded(
                 child: TextField(
                   controller: controller,
+                  enabled: enabled,
                   minLines: 1,
                   maxLines: 5,
                   textCapitalization: TextCapitalization.sentences,
                   keyboardType: TextInputType.multiline,
                   style: const TextStyle(fontSize: 15),
                   decoration: InputDecoration(
-                    hintText: 'Mesaj yaz…',
+                    hintText:
+                        enabled ? 'Mesaj yaz…' : 'Engel nedeniyle yazılamaz',
                     isDense: true,
                     contentPadding: const EdgeInsets.symmetric(
                       horizontal: 18,
@@ -332,7 +540,11 @@ class _MessageComposer extends StatelessWidget {
                 ),
               ),
               const SizedBox(width: 10),
-              _SendButton(isSending: isSending, onPressed: onSend),
+              _SendButton(
+                isSending: isSending,
+                onPressed: onSend,
+                enabled: enabled,
+              ),
             ],
           ),
         ),
@@ -342,15 +554,22 @@ class _MessageComposer extends StatelessWidget {
 }
 
 class _SendButton extends StatelessWidget {
-  const _SendButton({required this.isSending, required this.onPressed});
+  const _SendButton({
+    required this.isSending,
+    required this.onPressed,
+    this.enabled = true,
+  });
 
   final bool isSending;
   final VoidCallback onPressed;
+  final bool enabled;
 
   @override
   Widget build(BuildContext context) {
+    final isActive = enabled && !isSending;
+
     return GestureDetector(
-      onTap: isSending ? null : onPressed,
+      onTap: isActive ? onPressed : null,
       child: Container(
         height: 48,
         width: 48,
@@ -358,6 +577,12 @@ class _SendButton extends StatelessWidget {
           gradient: AppColors.primaryGradient,
           shape: BoxShape.circle,
         ),
+        foregroundDecoration: isActive
+            ? null
+            : BoxDecoration(
+                color: AppColors.background.withValues(alpha: 0.4),
+                shape: BoxShape.circle,
+              ),
         child: isSending
             ? const Padding(
                 padding: EdgeInsets.all(14),

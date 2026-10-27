@@ -66,6 +66,14 @@ class AuthService {
         await user.updateDisplayName(displayName.trim());
         await user.reload();
         await _upsertUserProfile(_auth.currentUser, fallbackName: displayName);
+
+        // Doğrulama bağlantısı gönderilir; gönderilemezse kayıt yine de
+        // tamamlanır (kullanıcı uygulamadan "tekrar gönder" diyebilir).
+        try {
+          await user.sendEmailVerification();
+        } on FirebaseAuthException {
+          // Sessiz geç: e-posta doğrulama akışı ayrı ekrandan yönetilir.
+        }
       }
 
       return credential;
@@ -74,13 +82,64 @@ class AuthService {
     }
   }
 
+  /// Şifre sıfırlama bağlantısı gönderir.
+  ///
+  /// Firebase, kayıtlı olmayan adreslerde de aynı yanıtı döndürür
+  /// (hesap varlığını sızdırmamak için); bu yüzden kullanıcıya "gönderildi"
+  /// mesajı verilirken spam/gereksiz klasörü kontrol etmesi önerilir.
   Future<void> sendPasswordResetEmail(String email) async {
+    final address = email.trim();
+    if (address.isEmpty) {
+      throw const AuthException('E-posta adresi gerekli.');
+    }
     try {
-      await _auth.sendPasswordResetEmail(email: email.trim());
+      await _auth.sendPasswordResetEmail(email: address);
     } on FirebaseAuthException catch (e) {
       throw AuthException(_messageFor(e));
     }
   }
+
+  /// Doğrulama e-postasını (yeniden) gönderir.
+  Future<void> sendEmailVerification() async {
+    final user = _auth.currentUser;
+    if (user == null) {
+      throw const AuthException('Bu işlem için giriş yapmalısın.');
+    }
+    if (user.emailVerified) {
+      throw const AuthException('E-posta adresin zaten doğrulanmış.');
+    }
+    try {
+      await user.sendEmailVerification();
+    } on FirebaseAuthException catch (e) {
+      throw AuthException(_messageFor(e));
+    }
+  }
+
+  /// Firebase'deki güncel kullanıcıyı çeker; doğrulama durumu değişmişse
+  /// `true` döner. Bağlantıya tıklandıktan sonra bunu çağırmak gerekir.
+  Future<bool> refreshEmailVerified() async {
+    final user = _auth.currentUser;
+    if (user == null) return false;
+    final before = user.emailVerified;
+    try {
+      await user.reload();
+    } on FirebaseAuthException {
+      return before;
+    }
+    final current = _auth.currentUser;
+    if (current != null && current.emailVerified && !before) {
+      try {
+        await _upsertUserProfile(current);
+      } catch (_) {
+        // Profil yazımı başarısız olsa da doğrulama geçerli.
+      }
+    }
+    return current?.emailVerified ?? false;
+  }
+
+  bool get emailVerified => _auth.currentUser?.emailVerified ?? false;
+
+  String? get email => _auth.currentUser?.email;
 
   // ---------------------------------------------------------------------------
   // Google Sign-In
@@ -186,13 +245,33 @@ class AuthService {
             ? fallbackName!.trim()
             : user.email?.split('@').first ?? 'Misafir');
 
-    await _firestore.collection('users').doc(user.uid).set({
+    final docRef = _firestore.collection('users').doc(user.uid);
+
+    final data = <String, dynamic>{
       'displayName': name,
-      'email': user.email,
-      'photoUrl': user.photoURL,
+      'displayNameLower': name.toLowerCase(),
+      'email': user.email ?? '',
+      'emailVerified': user.emailVerified,
       'lastSeenAt': FieldValue.serverTimestamp(),
-      'createdAt': FieldValue.serverTimestamp(),
-    }, SetOptions(merge: true));
+    };
+
+    // Google fotoğrafı varsa yazılır; kullanıcının seçtiği özel fotoğrafı
+    // (photoUrl) null ile ezmemek için yalnızca doluysa eklenir.
+    final photo = user.photoURL?.trim() ?? '';
+    if (photo.isNotEmpty) data['photoUrl'] = photo;
+
+    // `createdAt` yalnızca ilk kayıtta yazılır (güvenlik kuralı, güncellemede
+    // bu alanın değişmesine izin vermez ve tarih korunur).
+    var isNew = false;
+    try {
+      isNew = !(await docRef.get()).exists;
+    } catch (_) {
+      // Okuma engellenirse yalnızca var olan kayıt varsayımıyla devam et.
+      isNew = false;
+    }
+    if (isNew) data['createdAt'] = FieldValue.serverTimestamp();
+
+    await docRef.set(data, SetOptions(merge: true));
   }
 
   String _googleMessageFor(GoogleSignInException e) {
@@ -222,6 +301,13 @@ class AuthService {
       'too-many-requests' =>
         'Çok fazla deneme yapıldı. Lütfen biraz sonra tekrar deneyin.',
       'network-request-failed' => 'İnternet bağlantınızı kontrol edin.',
+      'quota-exceeded' =>
+        'Günlük e-posta gönderim kotası doldu. Yarın tekrar deneyin.',
+      'missing-email' => 'Hesaba bağlı bir e-posta adresi bulunamadı.',
+      'requires-recent-login' =>
+        'Bu işlem için tekrar giriş yapman gerekiyor.',
+      'internal-error' =>
+        'Firebase sunucusunda hata oluştu. Biraz sonra tekrar deneyin.',
       'operation-not-allowed' =>
         'İlgili giriş yöntemi Firebase konsolunda etkin değil.',
       'account-exists-with-different-credential' =>
