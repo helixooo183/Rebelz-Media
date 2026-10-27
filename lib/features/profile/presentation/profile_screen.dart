@@ -6,7 +6,6 @@ import '../../../core/widgets/app_card.dart';
 import '../../../core/widgets/primary_button.dart';
 import '../../../core/widgets/user_avatar.dart';
 import '../../../core/widgets/verify_email_banner.dart';
-import '../../moderation/data/moderation_repository.dart';
 import '../../moderation/presentation/reports_screen.dart';
 import '../../moderation/presentation/support_screen.dart';
 import '../data/user_repository.dart';
