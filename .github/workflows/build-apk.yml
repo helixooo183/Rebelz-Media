@@ -23,6 +23,15 @@ jobs:
   build-apk:
     runs-on: ubuntu-latest
     timeout-minutes: 60
+    env:
+      # Firebase konsolunda kayitli upload (release) parmak izi.
+      # Docs/README ile ayni deger; degisirse tek yerden guncellenir.
+      EXPECTED_UPLOAD_SHA1: '2E:96:3D:A6:63:06:D1:8F:34:A8:E5:1A:BD:7C:24:F1:41:B8:6E:8D'
+      # anahtarlar/upload-keystore.p12 ile ayni olmali (secret doğrulama)
+      EXPECTED_KEYSTORE_BYTES: '4384'
+      EXPECTED_KEYSTORE_SHA256: '0937d02a12134a77afe4cbf2e63b37cc6ee5bc2d5ae3c9aaef7842bfd4796bef'
+      # KEYSTORE_PASS karakter sayisi (deger sizdirilmaz, yalnizca uzunluk raporlanir)
+      EXPECTED_KEYSTORE_PASS_LEN: '28'
 
     steps:
       - uses: actions/checkout@v4
@@ -57,6 +66,7 @@ jobs:
           free -m
           nproc
           java -version
+          flutter --version
 
       - name: Bağımlılıklar
         run: flutter pub get
@@ -77,28 +87,86 @@ jobs:
           KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
           KEY_PASS: ${{ secrets.KEY_PASS }}
         run: |
+          set -o pipefail
           if [ -z "$KEYSTORE_B64" ]; then
             echo "::notice::KEYSTORE_B64 tanımlı değil — release APK debug keystore ile imzalanacak."
             exit 0
           fi
-          echo "$KEYSTORE_B64" | base64 -d > android/app/upload-keystore.p12
-          {
-            echo "storeFile=upload-keystore.p12"
-            echo "storePassword=$KEYSTORE_PASS"
-            echo "keyAlias=${KEY_ALIAS:-upload}"
-            echo "keyPassword=${KEY_PASS:-$KEYSTORE_PASS}"
-          } > android/key.properties
-          echo "::notice::Upload imza anahtarı hazır (alias: ${KEY_ALIAS:-upload})."
-          keytool -list -v -keystore android/app/upload-keystore.p12 \
-            -storetype PKCS12 -alias "${KEY_ALIAS:-upload}" -storepass "$KEYSTORE_PASS" \
-            | grep -E "SHA1:|SHA256:" || true
-          # Yanlış secret (parola/alias) sessizce debug imzaya düşmesin: burada patlat.
-          if ! keytool -list -keystore android/app/upload-keystore.p12 \
-              -storetype PKCS12 -alias "${KEY_ALIAS:-upload}" \
-              -storepass "$KEYSTORE_PASS" > /dev/null 2>&1; then
-            echo "::error::Upload anahtarı açılamadı — KEYSTORE_PASS / KEY_ALIAS secret'larını kontrol edin."
+
+          # Kopyala-yapıştır kaynaklı boşluk/satır sonlarını temizle (değerler
+          # yalnızca alfanümerik/bas64; boşluk hiçbir zaman anlamlı değil).
+          B64=$(printf '%s' "$KEYSTORE_B64" | tr -d '[:space:]')
+          PASS=$(printf '%s' "$KEYSTORE_PASS" | tr -d '[:space:]')
+          ALIAS=$(printf '%s' "${KEY_ALIAS:-upload}" | tr -d '[:space:]')
+          KPASS=$(printf '%s' "${KEY_PASS:-}" | tr -d '[:space:]')
+
+          # Depodaki anahtar PKCS#12: tek parola hem store hem private key icin
+          # gecerlidir. KEY_PASS farkli/eski bir deger olsa bile KEYSTORE_PASS
+          # kullanilir; aksi halde Gradle "Given final block not properly
+          # padded" ile private key'i acamaz.
+          if [ -n "$KPASS" ] && [ "$KPASS" != "$PASS" ]; then
+            echo "::warning::KEY_PASS, KEYSTORE_PASS ile ayni degil. PKCS#12 tek parola kullanir; KEYSTORE_PASS kullanilacak (KEY_PASS secret'ini ayni degerle guncelleyin)."
+          fi
+          KPASS="$PASS"
+
+          if ! printf '%s' "$B64" | base64 -d > android/app/upload-keystore.p12 2>/dev/null; then
+            echo "::error::KEYSTORE_B64 base64 olarak çözülemedi — değer eksik/bozuk kopyalanmış."
             exit 1
           fi
+
+          SIZE=$(stat -c%s android/app/upload-keystore.p12)
+          SHA=$(sha256sum android/app/upload-keystore.p12 | cut -d' ' -f1)
+          echo "p12 boyutu: $SIZE bayt · base64 uzunluğu: ${#B64} karakter · sha256: $SHA"
+          echo "::notice::Keystore çözüldü: $SIZE bayt, base64 ${#B64} karakter, sha256 ${SHA:0:16}…"
+          echo "::notice::Secret uzunlukları — KEYSTORE_PASS: ${#PASS} (beklenen ${EXPECTED_KEYSTORE_PASS_LEN:-28}) · KEY_ALIAS: ${#ALIAS} (beklenen 6)"
+          if [ -n "${EXPECTED_KEYSTORE_PASS_LEN:-}" ] && [ "${#PASS}" != "$EXPECTED_KEYSTORE_PASS_LEN" ]; then
+            echo "::error::KEYSTORE_PASS uzunluğu ${#PASS}, beklenen ${EXPECTED_KEYSTORE_PASS_LEN} — eksik/fazla karakter yapıştırılmış."
+            exit 1
+          fi
+
+          if [ "$SIZE" != "${EXPECTED_KEYSTORE_BYTES:-4384}" ]; then
+            echo "::error::Anahtar boyutu beklenen ${EXPECTED_KEYSTORE_BYTES:-4384} bayt değil ($SIZE) — KEYSTORE_B64 eksik/fazla kopyalanmış."
+            exit 1
+          fi
+          if [ -n "${EXPECTED_KEYSTORE_SHA256:-}" ] && [ "$SHA" != "$EXPECTED_KEYSTORE_SHA256" ]; then
+            echo "::error::Anahtar sha256 beklenen değerle uyuşmuyor — KEYSTORE_B64 başka bir dosyaya ait."
+            exit 1
+          fi
+
+          {
+            echo "storeFile=upload-keystore.p12"
+            echo "storePassword=$PASS"
+            echo "keyAlias=$ALIAS"
+            echo "keyPassword=$KPASS"
+          } > android/key.properties
+
+          # Anahtarı aç: parola ve alias'ı burada doğrula ki hata sessizce
+          # debug imzaya düşmesin. keytool çıktısı İngilizce olsun.
+          if ! KT=$(keytool -J-Duser.language=en -list -v \
+              -keystore android/app/upload-keystore.p12 -storetype PKCS12 \
+              -alias "$ALIAS" -storepass "$PASS" 2>&1); then
+            echo "$KT" | tail -6
+            case "$KT" in
+              *"password was incorrect"*|*"tampered"*|*"password"*)
+                echo "::error::Keystore parolası hatalı — KEYSTORE_PASS secret'ını kontrol edin." ;;
+              *"does not exist"*|*Alias*)
+                echo "::error::Alias bulunamadı: '$ALIAS' — KEY_ALIAS secret'ını kontrol edin." ;;
+              *)
+                echo "::error::Upload anahtarı açılamadı — KEYSTORE_PASS / KEY_ALIAS secret'larını kontrol edin." ;;
+            esac
+            exit 1
+          fi
+          echo "$KT" | grep -E "SHA1:|SHA256:" || true
+
+          # keytool yalnizca store parolasini dogrular; private key'in gercekten
+          # acilabildigini de kontrol et (Gradle 'not properly padded' hatasini
+          # 4 dakikalik derleme yerine burada yakala).
+          if ! openssl pkcs12 -in android/app/upload-keystore.p12 \
+              -passin pass:"$PASS" -nocerts -nodes > /dev/null 2>&1; then
+            echo "::error::Private key parola ile açılamadı — KEYSTORE_PASS ile anahtar uyumsuz."
+            exit 1
+          fi
+          echo "::notice::Upload imza anahtarı doğrulandı (alias: $ALIAS, private key ok)."
 
       # Not: log dosyalari herkese acik olmayabilir; Gradle hatasi hem annotation
       # hem de kosu ozetine yazilir ki sebep tek bakista gorunsun.
@@ -132,10 +200,24 @@ jobs:
           if-no-files-found: error
           retention-days: 30
 
+      # always(): derleme düşse bile özet/teşhis yazılsın.
       - name: İmza doğrulama (apksigner) + özet
+        if: always()
         run: |
+          APK=build/app/outputs/flutter-apk/app-release.apk
+          if [ ! -f "$APK" ]; then
+            echo "### ⚠️ Release APK üretilmedi" >> $GITHUB_STEP_SUMMARY
+            echo "Önceki adımların annotation'larına bakın (imza anahtarı veya Gradle)." \
+              >> $GITHUB_STEP_SUMMARY
+            exit 0
+          fi
           echo "### APK hazır" >> $GITHUB_STEP_SUMMARY
           echo "Artifact: **sohbet-apk**" >> $GITHUB_STEP_SUMMARY
+          APK_SIZE=$(du -h "$APK" | cut -f1)
+          APK_SHA=$(sha256sum "$APK" | cut -d' ' -f1)
+          echo "- \`app-release.apk\`: **$APK_SIZE**" >> $GITHUB_STEP_SUMMARY
+          echo "- apk sha256: \`$APK_SHA\`" >> $GITHUB_STEP_SUMMARY
+          echo "- commit: \`$GITHUB_SHA\` · run: [#$GITHUB_RUN_NUMBER]($GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID)" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           BUILD_TOOLS=$(ls "$ANDROID_HOME/build-tools" | sort -V | tail -1)
           APKSIGNER="$ANDROID_HOME/build-tools/$BUILD_TOOLS/apksigner"
@@ -150,9 +232,11 @@ jobs:
             >> $GITHUB_STEP_SUMMARY || true
           echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
           # Firebase'e kayitli iki parmak izi: release (upload) ve debug.
-          if grep -qi "92:A0:55:FE:C3:85:15:49:CC:45:8D:60:F1:E9:C4:B1:F4:D7:CC:3D" apk-certs.txt; then
+          EXPECTED_LOWER=$(echo "$EXPECTED_UPLOAD_SHA1" | tr 'A-Z' 'a-z' | tr -d ':')
+          if grep -qi "$EXPECTED_LOWER" apk-certs.txt; then
             echo "> ✅ **Upload (release) anahtarı** ile imzalı — Firebase'de kayıtlı SHA-1." \
               >> $GITHUB_STEP_SUMMARY
+            echo "> Beklenen: \`$EXPECTED_UPLOAD_SHA1\`" >> $GITHUB_STEP_SUMMARY
             echo "> Play Store'a yüklenebilir imza budur." >> $GITHUB_STEP_SUMMARY
           elif grep -qi "CA:D5:F0:42:CD:90:19:D7:61:E9:90:66:40:8A:D6:21:1C:A9:4C:4A" apk-certs.txt; then
             echo "> ✅ Debug anahtarı ile imzalı (Firebase'de kayıtlı debug SHA-1)." \

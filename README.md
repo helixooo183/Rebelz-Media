@@ -106,12 +106,24 @@ variables → Actions*:
 | `KEYSTORE_B64` | `base64 -w0 anahtarlar/upload-keystore.p12` |
 | `KEYSTORE_PASS` | anahtar deposu parolası |
 | `KEY_ALIAS` | `upload` |
-| `KEY_PASS` | anahtar parolası (genelde aynı) |
+| `KEY_PASS` | anahtar parolası — **`KEYSTORE_PASS` ile aynı olmalı** (depodaki anahtar PKCS#12'dir, tek parola kullanır) |
 
 Workflow bu secret'ları `android/app/upload-keystore.p12` + `android/key.properties`
-olarak açar (ikisi de git dışı) ve `keytool` ile doğrular; parola/alias yanlışsa
-koşu **hata vererek** durur — sessizce debug imzaya düşmez. Secret tanımlı
-değilse adım atlanır, APK debug anahtarıyla imzalanır.
+olarak açar (ikisi de git dışı) ve derlemeden **önce** doğrular:
+
+- base64 çözümü + p12 boyutu (4384 bayt) + sha256 sabitleri
+- `keytool` ile store parolası ve alias
+- `openssl` ile **private key'in parolayla açılabildiği** (Gradle'ın
+  `Given final block not properly padded` hatası burada yakalanır)
+
+Herhangi biri tutmazsa koşu **hata vererek** durur — sessizce debug imzaya
+düşmez. Secret tanımlı değilse adım atlanır, APK debug anahtarıyla imzalanır.
+`KEY_PASS` farklı bir değere ayarlıysa uyarı verilir ve PKCS#12 tek parola
+kuralı gereği `KEYSTORE_PASS` kullanılır.
+
+> **Doğrulanmış durum:** CI'da derlenen `app-release.apk`, upload anahtarıyla
+> imzalı — `certificate SHA-1 digest: 2e963da66306d18f34a8e51abd7c24f141b86e8d`
+> (Firebase'de kayıtlı `2E:96:3D:A6:…:6E:8D`).
 
 İmzayı doğrulama:
 
