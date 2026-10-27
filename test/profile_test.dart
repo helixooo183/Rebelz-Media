@@ -335,8 +335,9 @@ void main() {
         roomName: 'Rebelz Duyuru',
         roomType: 'channel',
       );
-      expect(invite.link, 'rebelzmedia://katil/K7M2P9QD');
-      expect(invite.shareText, contains('rebelzmedia://katil/K7M2P9QD'));
+      // Paylaşılan bağlantı artık https; özel şema yalnızca yönlendirme için.
+      expect(invite.link, 'https://rebelz-media.web.app/katil/?k=K7M2P9QD');
+      expect(invite.shareText, contains('https://'));
       expect(invite.shareText, contains('kanalına'));
     });
 
