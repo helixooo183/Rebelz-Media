@@ -81,9 +81,9 @@ class _FakeChatRepository implements ChatRepository {
 class _FakeUserRepository implements UserRepository {
   _FakeUserRepository({
     required this.me,
-    this.directory = const [],
-    this.blocked = const [],
-    this.blockedProfiles = const [],
+    this.directory = const <UserProfile>[],
+    this.blocked = const <String>{},
+    this.blockedProfiles = const <UserProfile>[],
   });
 
   final UserProfile me;

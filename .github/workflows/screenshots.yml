@@ -51,7 +51,21 @@ jobs:
         run: flutter pub get
 
       - name: Ekranları çiz
-        run: flutter test test_preview/preview_test.dart --update-goldens
+        run: |
+          set -o pipefail
+          flutter test test_preview/preview_test.dart --update-goldens 2>&1 | tee /tmp/render.log
+
+      # Hata ayrıntısı annotation olarak yayınlanır (iş logları herkese açık
+      # olmadığı için sebep tek bakışta görünsün).
+      - name: Hata ayrıntısı
+        if: failure()
+        run: |
+          [ -f /tmp/render.log ] || exit 0
+          msg=$(grep -E "Error|error|Exception|Expected|failed|Failed|Test failed" /tmp/render.log \
+            | head -25 | sed 's/^ *//' | tr '\n' '\036' | sed 's/\x1e/%0A/g')
+          [ -n "$msg" ] && echo "::error title=render::${msg}"
+          echo "### ❌ Render" >> $GITHUB_STEP_SUMMARY
+          tail -40 /tmp/render.log >> $GITHUB_STEP_SUMMARY 2>/dev/null || true
 
       - name: docs/ekranlar'ı güncelle
         run: |
