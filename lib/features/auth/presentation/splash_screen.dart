@@ -17,14 +17,12 @@ class SplashScreen extends StatelessWidget {
             child: DecoratedBox(
               decoration: BoxDecoration(
                 gradient: RadialGradient(
-                  center: const Alignment(0, -0.1),
-                  radius: 0.55,
+                  center: const Alignment(0, -0.12),
+                  radius: 0.72,
                   colors: [
-                    AppColors.brand.withValues(alpha: 0.16),
-                    AppColors.brandDeep.withValues(alpha: 0.05),
-                    const Color(0xFF060607),
+                    AppColors.brand.withValues(alpha: 0.15),
+                    const Color(0xFF08080A),
                   ],
-                  stops: const [0, 0.55, 1],
                 ),
               ),
             ),

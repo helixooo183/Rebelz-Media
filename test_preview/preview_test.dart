@@ -16,6 +16,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:sohbet/core/theme/app_theme.dart';
+import 'package:sohbet/core/widgets/app_logo.dart';
 import 'package:sohbet/features/auth/presentation/login_screen.dart';
 import 'package:sohbet/features/auth/presentation/register_screen.dart';
 import 'package:sohbet/features/auth/presentation/splash_screen.dart';
@@ -284,6 +285,23 @@ void main() {
         TestWidgetsFlutterBinding.instance.platformDispatcher.views.first;
     view.physicalSize = const Size(1170, 2532);
     view.devicePixelRatio = 3.0;
+  });
+
+  // İlk golden'da logo görünsün: marka görsellerini ImageCache'e ısıt.
+  testWidgets('00 logo ısınma', (tester) async {
+    await tester.pumpWidget(
+      _wrap(const Center(child: RebelzLogo(height: 40))),
+    );
+    await tester.runAsync(() async {
+      final context = tester.element(find.byType(RebelzLogo));
+      await precacheImage(const AssetImage('assets/brand/rebelz-mark.png'), context);
+      await precacheImage(
+        const AssetImage('assets/brand/rebelz-wordmark.png'),
+        context,
+      );
+    });
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 50));
   });
 
   final now = DateTime.now();
