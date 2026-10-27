@@ -9,6 +9,7 @@ import '../../../core/widgets/app_text_field.dart';
 import '../../../core/widgets/google_sign_in_button.dart';
 import '../../../core/widgets/gradient_button.dart';
 import '../../../core/widgets/or_divider.dart';
+import '../../profile/presentation/terms_sheet.dart';
 import 'auth_scaffold.dart';
 
 class RegisterScreen extends StatefulWidget {
@@ -27,6 +28,19 @@ class _RegisterScreenState extends State<RegisterScreen> {
   bool _isLoading = false;
   bool _isGoogleLoading = false;
 
+  /// Koşulların açıkça kabul edildiğini gösterir (kanıt kaydı için şart).
+  bool _acceptedTerms = false;
+
+  /// Kayıt sonrası Firestore'a onay yazar; başarısız olsa da akış sürer
+  /// (uygulama açılışında onay eksikse tekrar sorulur).
+  Future<void> _recordTerms() async {
+    try {
+      await userRepositoryInstance.acceptTerms();
+    } catch (_) {
+      // Sessiz geç: onay, sohbetler ekranındaki hatırlatmayla tamamlanır.
+    }
+  }
+
   @override
   void dispose() {
     _nameController.dispose();
@@ -37,6 +51,10 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
   Future<void> _submit() async {
     if (!_formKey.currentState!.validate()) return;
+    if (!_acceptedTerms) {
+      _showError('Devam etmek için kullanım koşullarını kabul etmelisin.');
+      return;
+    }
 
     setState(() => _isLoading = true);
     try {
@@ -45,6 +63,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
         email: _emailController.text,
         password: _passwordController.text,
       );
+      await _recordTerms();
     } on AuthException catch (e) {
       _showError(e.message);
     } catch (_) {
@@ -55,10 +74,16 @@ class _RegisterScreenState extends State<RegisterScreen> {
   }
 
   Future<void> _googleSignIn() async {
+    if (!_acceptedTerms) {
+      _showError('Devam etmek için kullanım koşullarını kabul etmelisin.');
+      return;
+    }
+
     setState(() => _isGoogleLoading = true);
     try {
       final credential = await authServiceInstance.signInWithGoogle();
       if (credential == null && mounted) return;
+      await _recordTerms();
     } on AuthException catch (e) {
       _showError(e.message);
     } catch (_) {
@@ -81,7 +106,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
       subtitle: 'Birkaç saniyede kaydol ve sohbetlere katıl.',
       children: [
         GoogleSignInButton(
-          onPressed: _googleSignIn,
+          onPressed: _acceptedTerms ? _googleSignIn : null,
           label: 'Google ile kayıt ol',
           isLoading: _isGoogleLoading,
         ),
@@ -142,11 +167,27 @@ class _RegisterScreenState extends State<RegisterScreen> {
                   return null;
                 },
               ),
-              const SizedBox(height: 28),
+              const SizedBox(height: 18),
+              TermsCheckbox(
+                value: _acceptedTerms,
+                enabled: !_isLoading && !_isGoogleLoading,
+                onChanged: (value) => setState(() => _acceptedTerms = value),
+              ),
+              const SizedBox(height: 10),
+              const Text(
+                'Kayıttan sonra doğrulama bağlantısı e-postana gönderilir. '
+                'Gelmezse spam/gereksiz klasörünü kontrol et.',
+                style: TextStyle(
+                  fontSize: 12,
+                  height: 1.4,
+                  color: AppColors.textMuted,
+                ),
+              ),
+              const SizedBox(height: 20),
               GradientButton(
                 label: 'Kayıt ol',
                 isLoading: _isLoading,
-                onPressed: _isGoogleLoading ? null : _submit,
+                onPressed: _isGoogleLoading || !_acceptedTerms ? null : _submit,
               ),
             ],
           ),

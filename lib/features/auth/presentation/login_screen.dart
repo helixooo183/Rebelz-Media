@@ -25,6 +25,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
   bool _isLoading = false;
   bool _isGoogleLoading = false;
+  bool _isSendingReset = false;
 
   @override
   void dispose() {
@@ -74,14 +75,75 @@ class _LoginScreenState extends State<LoginScreen> {
       _showError('Önce e-posta adresinizi yazın.');
       return;
     }
+
+    setState(() => _isSendingReset = true);
     try {
       await authServiceInstance.sendPasswordResetEmail(email);
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Şifre sıfırlama bağlantısı gönderildi.')),
-      );
+      await _showResetSent(email);
     } on AuthException catch (e) {
       _showError(e.message);
+    } finally {
+      if (mounted) setState(() => _isSendingReset = false);
+    }
+  }
+
+  /// Gönderim sonrası ne yapılacağını açıklar (bağlantı gelmezse kontrol
+  /// edilecekler dahil). Kullanıcı burada e-posta adresini düzeltebilir.
+  Future<void> _showResetSent(String email) async {
+    final result = await showDialog<String>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        backgroundColor: AppColors.surface,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: const Text('Sıfırlama bağlantısı gönderildi'),
+        content: SingleChildScrollView(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                '$email adresine şifre sıfırlama bağlantısı gönderdik.',
+                style: const TextStyle(fontSize: 14, height: 1.45),
+              ),
+              const SizedBox(height: 12),
+              const Text(
+                'Bağlantı gelmediyse:',
+                style: TextStyle(
+                  fontSize: 13.5,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              const SizedBox(height: 6),
+              const Text(
+                '• Spam / Gereksiz / Promosyonlar klasörüne bak.\n'
+                '• Adresi doğru yazdığından emin ol.\n'
+                '• Birkaç dakika bekle, ardından tekrar gönder.\n'
+                '• Bağlantı 1 saat içinde kullanılmalı.',
+                style: TextStyle(
+                  fontSize: 13,
+                  height: 1.5,
+                  color: AppColors.textSecondary,
+                ),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: const Text('Tamam'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialogContext, 'again'),
+            child: const Text('Tekrar gönder'),
+          ),
+        ],
+      ),
+    );
+
+    if (result == 'again' && mounted) {
+      await _resetPassword();
     }
   }
 
@@ -146,8 +208,14 @@ class _LoginScreenState extends State<LoginScreen> {
               Align(
                 alignment: Alignment.centerRight,
                 child: TextButton(
-                  onPressed: (_isLoading || _isGoogleLoading) ? null : _resetPassword,
-                  child: const Text('Şifremi unuttum'),
+                  onPressed: (_isLoading || _isGoogleLoading || _isSendingReset)
+                      ? null
+                      : _resetPassword,
+                  child: Text(
+                    _isSendingReset
+                        ? 'Gönderiliyor…'
+                        : 'Şifremi unuttum',
+                  ),
                 ),
               ),
               const SizedBox(height: 12),

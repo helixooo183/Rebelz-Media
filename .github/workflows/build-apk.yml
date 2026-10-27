@@ -76,15 +76,34 @@ jobs:
       - name: Bağımlılıklar
         run: flutter pub get
 
+      # Analiz/test hataları annotation olarak da yayınlanır: iş logları
+      # herkese açık olmadığı için sebepler tek bakışta görünsün.
       - name: Analiz + testler
         run: |
-          flutter analyze
-          flutter test
+          set -o pipefail
+          flutter analyze 2>&1 | tee /tmp/analyze.log
+          flutter test 2>&1 | tee /tmp/test.log
 
-      # GitHub -> Settings -> Secrets and variables -> Actions altinda
-      # KEYSTORE_B64 (base64'lenmis .p12), KEYSTORE_PASS, KEY_ALIAS, KEY_PASS
-      # tanimliysa upload anahtari acilir ve release APK onunla imzalanir.
-      # Tanimli degilse build.gradle.kts debug anahtarina duser.
+      - name: Analiz/test hatalarını annotation'a yaz
+        if: failure()
+        run: |
+          summarize() {
+            local file="$1" title="$2"
+            [ -f "$file" ] || return 0
+            grep -E "^\s*(error|warning|info) • |Error:|FAILED|Test failed|Expected:" "$file" \
+              | head -40 \
+              | sed -e 's/^ *//' \
+              | tr '\n' '\036' \
+              | sed -e 's/\x1e/%0A/g' > /tmp/msg.txt
+            local msg
+            msg=$(cat /tmp/msg.txt)
+            [ -n "$msg" ] && echo "::error title=$title::$msg" || true
+          }
+          summarize /tmp/analyze.log "flutter analyze"
+          summarize /tmp/test.log "flutter test"
+          echo "### ❌ Analiz/test" >> $GITHUB_STEP_SUMMARY
+          tail -40 /tmp/analyze.log /tmp/test.log >> $GITHUB_STEP_SUMMARY 2>/dev/null || true
+
       - name: Release imza anahtarını aç (secret varsa)
         env:
           KEYSTORE_B64: ${{ secrets.KEYSTORE_B64 }}
