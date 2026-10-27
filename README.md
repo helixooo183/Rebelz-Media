@@ -1,6 +1,7 @@
 # Rebelz Media — Sohbet (Flutter + Firebase)
 
 ![APK derle](https://github.com/helixooo183/Rebelz-Media/actions/workflows/build-apk.yml/badge.svg?branch=main)
+![Release](https://github.com/helixooo183/Rebelz-Media/actions/workflows/release.yml/badge.svg?branch=main)
 
 Rebelz Media: **Threads'in sade tipografisi + WhatsApp'ın tanıdık sohbet
 düzeni**. Vurgu rengi logo kırmızısı (`#FF2D2D`), açık/koyu tema **sistem
@@ -57,6 +58,25 @@ flutter run            # cihaz/emülatör
 flutter analyze        # statik analiz
 flutter test           # 6 test
 ```
+
+**0) En kolay: hazır APK'yı indir**
+
+`.github/workflows/release.yml`, `pubspec.yaml` sürümü değiştiğinde imzalı
+release APK'sını **GitHub Release** olarak yayınlar — giriş gerekmez, süresi
+dolmaz:
+
+- Son sürümler: <https://github.com/helixooo183/Rebelz-Media/releases/latest>
+- Doğrudan indirme (v0.4.0-6): <https://github.com/helixooo183/Rebelz-Media/releases/download/v0.4.0-6/rebelz-media-v0.4.0-6.apk>
+
+Dosya adı sürümü taşır (`rebelz-media-v<ad>-<build>.apk`); yanında
+`.apk.sha256` yayınlanır:
+
+```bash
+sha256sum -c rebelz-media-v0.4.0-6.apk.sha256
+```
+
+Workflow aynı sürüm için ikinci kez çalışırsa derlemeyi atlar; etiket `main`
+üzerinde oluşturulur.
 
 APK üretmek için iki yol var — ikisi de ayrıntılı olarak
 [docs/KURULUM.md](docs/KURULUM.md) içinde:
