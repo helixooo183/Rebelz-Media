@@ -36,7 +36,7 @@ class AuthScaffold extends StatelessWidget {
   Widget build(BuildContext context) {
     final size = MediaQuery.sizeOf(context);
     final topInset = MediaQuery.paddingOf(context).top;
-    final banner = bannerHeight ?? (size.height * 0.30).clamp(200.0, 300.0);
+    final banner = bannerHeight ?? (size.height * 0.28).clamp(196.0, 280.0);
 
     return Scaffold(
       backgroundColor: const Color(0xFF0A0A0A),
@@ -51,7 +51,7 @@ class AuthScaffold extends StatelessWidget {
               logoHeight: logoHeight,
             ),
             Padding(
-              padding: const EdgeInsets.fromLTRB(24, 26, 24, 0),
+              padding: const EdgeInsets.fromLTRB(24, 20, 24, 0),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -74,10 +74,10 @@ class AuthScaffold extends StatelessWidget {
                       color: Color(0xFF9B9BA4),
                     ),
                   ),
-                  const SizedBox(height: 26),
+                  const SizedBox(height: 20),
                   if (children != null) ...children!,
                   if (footer != null) ...[
-                    const SizedBox(height: 22),
+                    const SizedBox(height: 14),
                     footer!,
                   ],
                 ],

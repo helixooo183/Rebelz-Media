@@ -105,7 +105,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
     return AuthScaffold(
       title: 'Hesap oluştur',
       subtitle: 'Saniyeler içinde katıl; kullanıcı adını seç, çevreni kur.',
-      logoHeight: 84,
+      logoHeight: 76,
+      bannerHeight: 184,
       footer: Row(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
@@ -117,10 +118,11 @@ class _RegisterScreenState extends State<RegisterScreen> {
             onPressed: isBusy ? null : () => context.go(AppRoutes.login),
             style: TextButton.styleFrom(
               foregroundColor: AppColors.brand,
-              textStyle: const TextStyle(
-                fontSize: 14.5,
-                fontWeight: FontWeight.w700,
-              ),
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+              textStyle: Theme.of(context).textTheme.labelLarge?.copyWith(
+                    fontSize: 14.5,
+                    fontWeight: FontWeight.w700,
+                  ),
             ),
             child: const Text('Giriş yap'),
           ),
@@ -132,9 +134,9 @@ class _RegisterScreenState extends State<RegisterScreen> {
           label: 'Google ile kayıt ol',
           isLoading: _isGoogleLoading,
         ),
-        const SizedBox(height: 18),
+        const SizedBox(height: 16),
         const OrDivider(label: 'veya e-posta ile'),
-        const SizedBox(height: 18),
+        const SizedBox(height: 16),
         Form(
           key: _formKey,
           child: Column(
@@ -155,7 +157,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                   return null;
                 },
               ),
-              const SizedBox(height: 16),
+              const SizedBox(height: 14),
               AppTextField.dark(
                 controller: _emailController,
                 hintText: 'ornek@mail.com',
@@ -172,7 +174,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                   return null;
                 },
               ),
-              const SizedBox(height: 16),
+              const SizedBox(height: 14),
               AppTextField.dark(
                 controller: _passwordController,
                 hintText: 'En az 6 karakter',
@@ -190,23 +192,23 @@ class _RegisterScreenState extends State<RegisterScreen> {
                   return null;
                 },
               ),
-              const SizedBox(height: 18),
+              const SizedBox(height: 14),
               TermsCheckbox(
                 value: _acceptedTerms,
                 enabled: !isBusy,
                 onChanged: (value) => setState(() => _acceptedTerms = value),
               ),
-              const SizedBox(height: 12),
+              const SizedBox(height: 10),
               const Text(
-                'Kayıttan sonra doğrulama bağlantısı e-postana gönderilir. '
-                'Gelmezse spam/gereksiz klasörünü kontrol et.',
+                'Kayıttan sonra doğrulama bağlantısı e-postana gönderilir; '
+                'gelmezse spam klasörünü kontrol et.',
                 style: TextStyle(
                   fontSize: 12,
                   height: 1.45,
                   color: Color(0xFF8E8E97),
                 ),
               ),
-              const SizedBox(height: 18),
+              const SizedBox(height: 14),
               PrimaryButton(
                 label: 'Kayıt ol',
                 isLoading: _isLoading,

@@ -142,6 +142,7 @@ class _LoginScreenState extends State<LoginScreen> {
     return AuthScaffold(
       title: 'Tekrar hoş geldin',
       subtitle: 'Sohbetlerine, kanallarına ve çevrene kaldığın yerden devam et.',
+      logoHeight: 92,
       footer: _Footer(
         busy: _isLoading || _isGoogleLoading,
         onRegister: () => context.go(AppRoutes.register),
@@ -151,9 +152,9 @@ class _LoginScreenState extends State<LoginScreen> {
           onPressed: _googleSignIn,
           isLoading: _isGoogleLoading,
         ),
-        const SizedBox(height: 18),
+        const SizedBox(height: 16),
         const OrDivider(label: 'veya e-posta ile'),
-        const SizedBox(height: 18),
+        const SizedBox(height: 16),
         Form(
           key: _formKey,
           child: Column(
@@ -173,7 +174,7 @@ class _LoginScreenState extends State<LoginScreen> {
                   return null;
                 },
               ),
-              const SizedBox(height: 16),
+              const SizedBox(height: 14),
               AppTextField.dark(
                 controller: _passwordController,
                 hintText: '••••••••',
@@ -192,7 +193,6 @@ class _LoginScreenState extends State<LoginScreen> {
                   return null;
                 },
               ),
-              const SizedBox(height: 2),
               Align(
                 alignment: Alignment.centerRight,
                 child: TextButton(
@@ -201,17 +201,23 @@ class _LoginScreenState extends State<LoginScreen> {
                       : _resetPassword,
                   style: TextButton.styleFrom(
                     foregroundColor: AppColors.brand,
-                    textStyle: const TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w700,
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 10,
                     ),
+                    // Metin stili temadan türetilir (sabit TextStyle yazı
+                    // tipini kaybettirip kutucuk çizilmesine yol açıyordu).
+                    textStyle: Theme.of(context).textTheme.labelLarge?.copyWith(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w700,
+                        ),
                   ),
                   child: Text(
                     _isSendingReset ? 'Gönderiliyor…' : 'Şifremi unuttum',
                   ),
                 ),
               ),
-              const SizedBox(height: 6),
+              const SizedBox(height: 4),
               PrimaryButton(
                 label: 'Giriş yap',
                 isLoading: _isLoading,
@@ -244,10 +250,11 @@ class _Footer extends StatelessWidget {
           onPressed: busy ? null : onRegister,
           style: TextButton.styleFrom(
             foregroundColor: AppColors.brand,
-            textStyle: const TextStyle(
-              fontSize: 14.5,
-              fontWeight: FontWeight.w700,
-            ),
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+            textStyle: Theme.of(context).textTheme.labelLarge?.copyWith(
+                  fontSize: 14.5,
+                  fontWeight: FontWeight.w700,
+                ),
           ),
           child: const Text('Kayıt ol'),
         ),
