@@ -774,7 +774,7 @@ void main() {
   });
 
   testWidgets('17 kanal ayarları (moderatörler ve izinler)', (tester) async {
-    final kanal = ChatRoom(
+    const kanal = ChatRoom(
       id: 'c9',
       name: 'Rebelz Duyuru',
       createdBy: 'u1',
@@ -783,13 +783,13 @@ void main() {
       type: 'channel',
       about: 'Ürün güncellemeleri ve yeni özellikler',
       subscriberCount: 128,
-      roles: const {'u2': ChatRoom.roleModerator},
-      memberNames: const {
+      roles: {'u2': ChatRoom.roleModerator},
+      memberNames: {
         'u1': 'Ayşe Yılmaz',
         'u2': 'Deniz Kaya',
         'u3': 'Emre Demir',
       },
-      permissions: const {ChatRoom.permModsDeleteMessages: true},
+      permissions: {ChatRoom.permModsDeleteMessages: true},
     );
 
     await tester.pumpWidget(

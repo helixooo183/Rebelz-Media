@@ -10,7 +10,6 @@ import '../../../core/widgets/primary_button.dart';
 import '../../../core/widgets/user_avatar.dart';
 import '../data/chat_repository.dart';
 import '../domain/models/chat_room.dart';
-import '../domain/models/room_invite.dart';
 
 /// Yayın kanalları: keşfet, katıl ve kendi kanalını aç.
 class ChannelsScreen extends StatefulWidget {
