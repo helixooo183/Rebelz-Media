@@ -3,6 +3,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 
+import '../../features/profile/domain/avatar_policy.dart';
 import '../config/google_sign_in_config.dart';
 
 /// Kimlik doğrulama işlemlerini tek noktada toplar
@@ -247,28 +248,43 @@ class AuthService {
 
     final docRef = _firestore.collection('users').doc(user.uid);
 
+    // Mevcut kayıt: kullanıcının kendi seçtiği ad/fotoğraf ezilmesin.
+    var existing = const <String, dynamic>{};
+    var isNew = false;
+    try {
+      final snapshot = await docRef.get();
+      isNew = !snapshot.exists;
+      existing = snapshot.data() ?? const <String, dynamic>{};
+    } catch (_) {
+      // Okuma engellenirse yalnızca var olan kayıt varsayımıyla devam et.
+      isNew = false;
+    }
+
+    final resolvedName = AvatarPolicy.displayNameOnLogin(
+          existingName: (existing['displayName'] as String?) ?? '',
+          googleName: name,
+        ) ??
+        name;
+
     final data = <String, dynamic>{
-      'displayName': name,
-      'displayNameLower': name.toLowerCase(),
+      'displayName': resolvedName,
+      'displayNameLower': resolvedName.toLowerCase(),
       'email': user.email ?? '',
       'emailVerified': user.emailVerified,
       'lastSeenAt': FieldValue.serverTimestamp(),
     };
 
-    // Google fotoğrafı varsa yazılır; kullanıcının seçtiği özel fotoğrafı
-    // (photoUrl) null ile ezmemek için yalnızca doluysa eklenir.
-    final photo = user.photoURL?.trim() ?? '';
-    if (photo.isNotEmpty) data['photoUrl'] = photo;
+    // Kullanıcı kendi fotoğrafını seçtiyse/kaldırdıysa Google fotoğrafı
+    // yazılmaz (bkz. [AvatarPolicy]).
+    final photo = AvatarPolicy.photoOnLogin(
+      existingPhoto: (existing['photoUrl'] as String?) ?? '',
+      existingSource: (existing['photoSource'] as String?) ?? '',
+      googlePhoto: user.photoURL ?? '',
+    );
+    if (photo != null) data['photoUrl'] = photo;
 
     // `createdAt` yalnızca ilk kayıtta yazılır (güvenlik kuralı, güncellemede
     // bu alanın değişmesine izin vermez ve tarih korunur).
-    var isNew = false;
-    try {
-      isNew = !(await docRef.get()).exists;
-    } catch (_) {
-      // Okuma engellenirse yalnızca var olan kayıt varsayımıyla devam et.
-      isNew = false;
-    }
     if (isNew) data['createdAt'] = FieldValue.serverTimestamp();
 
     await docRef.set(data, SetOptions(merge: true));

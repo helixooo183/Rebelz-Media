@@ -313,6 +313,53 @@ class ChatRepository {
     }, SetOptions(merge: true));
   }
 
+  /// Moderatör/sahip: başkasının mesajını herkesten siler.
+  ///
+  /// Mesaj dokümanı kaldırılır (kural: `modsDeleteMessages` izni varsa
+  /// sahip/moderatör silebilir). Kendi mesajında [deleteMessage] kullanılır,
+  /// böylece "Bu mesaj silindi" izi kalır.
+  Future<void> deleteMessageAsModerator(
+    String roomId,
+    String messageId,
+  ) async {
+    _requireUid();
+    await _rooms.doc(roomId).collection('messages').doc(messageId).delete();
+  }
+
+  /// "Benden sil": mesaj yalnızca bu kullanıcıda gizlenir.
+  ///
+  /// Kayıt `users/{uid}/hiddenMessages/{roomId__messageId}` altında tutulur;
+  /// başka kimse göremez ve mesaj diğer üyeler için silinmez.
+  Future<void> hideMessageForMe(String roomId, String messageId) async {
+    final uid = _requireUid();
+    await _db
+        .collection('users')
+        .doc(uid)
+        .collection('hiddenMessages')
+        .doc('${roomId}__$messageId')
+        .set({
+      'roomId': roomId,
+      'messageId': messageId,
+      'createdAt': FieldValue.serverTimestamp(),
+    });
+  }
+
+  /// Bu sohbette benim gizlediğim mesaj kimlikleri.
+  Stream<Set<String>> watchHiddenMessageIds(String roomId) {
+    final uid = _myUid;
+    if (uid == null) return Stream<Set<String>>.value(const <String>{});
+    return _db
+        .collection('users')
+        .doc(uid)
+        .collection('hiddenMessages')
+        .where('roomId', isEqualTo: roomId)
+        .snapshots()
+        .map((snapshot) => snapshot.docs
+            .map((doc) => (doc.data()['messageId'] as String?) ?? '')
+            .where((id) => id.isNotEmpty)
+            .toSet());
+  }
+
   /// Kendi metin mesajını düzenler.
   Future<void> editMessage(
     String roomId,
@@ -404,6 +451,35 @@ class ChatRepository {
     if (about != null) data['about'] = about.trim();
     if (data.isEmpty) return;
     await _rooms.doc(roomId).set(data, SetOptions(merge: true));
+  }
+
+  /// Kanal/grup fotoğrafı için üst sınır (kuraldaki `isPhoto` ile aynı).
+  /// 400 000 karakter ≈ 390 KB; tipik avatar 10-25 KB.
+  static const int maxRoomPhotoLength = 400000;
+
+  /// Kanal/grup fotoğrafını değiştirir.
+  ///
+  /// [dataUri] boş verilirse fotoğraf kaldırılır. Firestore'a base64
+  /// `data:` URI'si olarak yazılır (Storage kullanılmıyor), bu yüzden boyut
+  /// sınırı burada da kontrol edilir.
+  Future<void> setRoomPhoto(String roomId, String dataUri) async {
+    _requireUid();
+    final value = dataUri.trim();
+    if (value.isEmpty) {
+      await _rooms.doc(roomId).set({
+        'photoUrl': '',
+      }, SetOptions(merge: true));
+      return;
+    }
+    if (!value.startsWith('data:image/')) {
+      throw const ChatException('Fotoğraf okunamadı, tekrar deneyin.');
+    }
+    if (value.length > maxRoomPhotoLength) {
+      throw const ChatException('Fotoğraf çok büyük (en fazla ~390 KB).');
+    }
+    await _rooms.doc(roomId).set({
+      'photoUrl': value,
+    }, SetOptions(merge: true));
   }
 
   /// Bir izni açar/kapatır (bkz. `ChatRoom.permOnlyModsPost`).

@@ -361,6 +361,9 @@ flutter test test_preview/preview_test.dart --update-goldens   # docs/screens.pn
 - [x] Kanallar ekranında **arama çubuğu**
 - [x] **Davet derin bağlantısı** (`rebelzmedia://katil/<kod>` → uygulama açılır)
 - [x] **Şikayet inceleme paneli** (`admins/{uid}`, durum güncelleme)
+- [x] **Kanal/grup fotoğrafı** (galeriden, base64 — sahip/moderatör)
+- [x] **Avatar koruması** (girişte Google fotoğrafı/adı özel seçimi ezmez)
+- [x] **Mesaj silme** (benden sil / herkesten sil) + fotoğrafta tam ekran görüntüleme
 - [ ] Mesaj sayfalama (şu an son 200 mesaj), FCM bildirimleri
 
 ---

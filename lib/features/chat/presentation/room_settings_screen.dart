@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../../../core/services/media_service.dart';
 import '../../../core/services/services.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/widgets/user_avatar.dart';
@@ -76,6 +77,77 @@ class _RoomSettingsScreenState extends State<RoomSettingsScreen> {
   }
 
   // ------------------------------------------------------------------ düzenleme
+
+  /// Kanal/grup fotoğrafını galeriden seçer (profil avatarıyla aynı akış).
+  Future<void> _changeRoomPhoto(ChatRoom room) async {
+    if (_isBusy) return;
+    final picked = await MediaService.instance.pickAvatar();
+    if (picked == null) return;
+
+    final dataUri = picked.dataUri;
+    if (dataUri.length > ChatRepository.maxRoomPhotoLength) {
+      _toast('Fotoğraf çok büyük, daha küçük bir görsel seç.');
+      return;
+    }
+    await _run(
+      () => _repo.setRoomPhoto(widget.roomId, dataUri),
+      '${room.isChannel ? 'Kanal' : 'Grup'} fotoğrafı güncellendi.',
+    );
+  }
+
+  Future<void> _removeRoomPhoto(ChatRoom room) async {
+    if (_isBusy) return;
+    await _run(
+      () => _repo.setRoomPhoto(widget.roomId, ''),
+      '${room.isChannel ? 'Kanal' : 'Grup'} fotoğrafı kaldırıldı.',
+    );
+  }
+
+  /// Avatara dokununca: fotoğraf varsa "değiştir / kaldır" seçenekleri.
+  Future<void> _onPhotoTap(ChatRoom room) async {
+    if (_isBusy) return;
+    if (room.photoUrl.isEmpty) {
+      await _changeRoomPhoto(room);
+      return;
+    }
+
+    final action = await showModalBottomSheet<String>(
+      context: context,
+      showDragHandle: true,
+      builder: (sheetContext) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: const Icon(Icons.photo_library_rounded),
+              title: const Text('Fotoğrafı değiştir'),
+              onTap: () => Navigator.pop(sheetContext, 'change'),
+            ),
+            ListTile(
+              leading: Icon(
+                Icons.delete_outline_rounded,
+                color: sheetContext.colors.error,
+              ),
+              title: Text(
+                'Fotoğrafı kaldır',
+                style: TextStyle(color: sheetContext.colors.error),
+              ),
+              onTap: () => Navigator.pop(sheetContext, 'remove'),
+            ),
+            const SizedBox(height: 8),
+          ],
+        ),
+      ),
+    );
+
+    if (!mounted) return;
+    switch (action) {
+      case 'change':
+        await _changeRoomPhoto(room);
+      case 'remove':
+        await _removeRoomPhoto(room);
+    }
+  }
 
   Future<void> _editInfo(ChatRoom room) async {
     final nameController = TextEditingController(text: room.name);
@@ -327,6 +399,9 @@ class _RoomSettingsScreenState extends State<RoomSettingsScreen> {
                       onEdit: _isBusy || !room.yonetebilirMi(_myUid)
                           ? null
                           : () => _editInfo(room),
+                      onPhotoTap: _isBusy || !room.yonetebilirMi(_myUid)
+                          ? null
+                          : () => _onPhotoTap(room),
                     ),
                     const SizedBox(height: 20),
                     if (room.isChannel && room.sahipMi(_myUid))
@@ -629,20 +704,56 @@ class _RoomSettingsScreenState extends State<RoomSettingsScreen> {
 }
 
 class _RoomHeader extends StatelessWidget {
-  const _RoomHeader({required this.room, required this.onEdit});
+  const _RoomHeader({
+    required this.room,
+    required this.onEdit,
+    this.onPhotoTap,
+  });
 
   final ChatRoom room;
   final VoidCallback? onEdit;
+
+  /// Avatar dokunuşu (yalnızca sahip/moderatörde dolu).
+  final VoidCallback? onPhotoTap;
 
   @override
   Widget build(BuildContext context) {
     return Row(
       children: [
-        UserAvatar(
-          name: room.name,
-          size: 62,
-          photoUrl: room.photoUrl,
-          isGroup: room.isGroup,
+        GestureDetector(
+          onTap: onPhotoTap,
+          child: Stack(
+            clipBehavior: Clip.none,
+            children: [
+              UserAvatar(
+                name: room.name,
+                size: 62,
+                photoUrl: room.photoUrl,
+                isGroup: room.isGroup,
+              ),
+              if (onPhotoTap != null)
+                Positioned(
+                  right: -2,
+                  bottom: -2,
+                  child: Container(
+                    padding: const EdgeInsets.all(5),
+                    decoration: BoxDecoration(
+                      color: context.colors.primary,
+                      shape: BoxShape.circle,
+                      border: Border.all(
+                        color: Theme.of(context).scaffoldBackgroundColor,
+                        width: 2,
+                      ),
+                    ),
+                    child: const Icon(
+                      Icons.photo_camera_rounded,
+                      size: 13,
+                      color: Colors.white,
+                    ),
+                  ),
+                ),
+            ],
+          ),
         ),
         const SizedBox(width: 14),
         Expanded(

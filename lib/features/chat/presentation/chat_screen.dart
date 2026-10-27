@@ -85,6 +85,10 @@ class _ChatScreenState extends State<ChatScreen> {
   bool _typingSent = false;
   bool _readMarked = false;
 
+  /// "Benden sil" ile gizlenen mesaj kimlikleri (yalnızca bu kullanıcıda).
+  Set<String> _hiddenIds = const <String>{};
+  StreamSubscription<Set<String>>? _hiddenSub;
+
   MediaService get _media => _mediaInstance ??= widget.mediaService ??
       MediaService.instance;
 
@@ -103,10 +107,19 @@ class _ChatScreenState extends State<ChatScreen> {
     super.initState();
     _loadBlockState();
     _messageController.addListener(_onComposerChanged);
+    _hiddenSub = _repository.watchHiddenMessageIds(widget.roomId).listen(
+      (ids) {
+        if (mounted) setState(() => _hiddenIds = ids);
+      },
+      onError: (_) {
+        // Kural/deploy eksikse gizleme olmadan devam et.
+      },
+    );
   }
 
   @override
   void dispose() {
+    _hiddenSub?.cancel();
     _recordTimer?.cancel();
     _typingTimer?.cancel();
     _messageController.removeListener(_onComposerChanged);
@@ -257,6 +270,74 @@ class _ChatScreenState extends State<ChatScreen> {
         const SnackBar(content: Text('Mesaj şikayeti iletildi.')),
       );
     }
+  }
+
+  /// "Benden sil": mesaj yalnızca bu kullanıcıda kaybolur.
+  Future<void> _hideForMe(ChatMessage message) async {
+    try {
+      await _repository.hideMessageForMe(widget.roomId, message.id);
+      if (!mounted) return;
+      setState(() => _hiddenIds = {..._hiddenIds, message.id});
+      _toast('Mesaj senden gizlendi.');
+    } catch (e) {
+      _toast('Mesaj gizlenemedi: $e');
+    }
+  }
+
+  /// "Herkesten sil": onay ister, sonra tüm üyelerden kaldırır.
+  Future<void> _deleteForEveryone(ChatMessage message, {required bool mine}) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Herkesten silinsin mi?'),
+        content: Text(
+          mine
+              ? 'Mesaj tüm üyelerden silinecek. Bu işlem geri alınamaz.'
+              : 'Bu mesaj tüm üyelerden silinecek (moderatör işlemi).',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('Vazgeç'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: const Text('Sil'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+
+    try {
+      if (mine) {
+        await _repository.deleteMessage(widget.roomId, message.id);
+      } else {
+        await _repository.deleteMessageAsModerator(widget.roomId, message.id);
+      }
+      _toast('Mesaj herkesten silindi.');
+    } catch (e) {
+      _toast('Mesaj silinemedi: $e');
+    }
+  }
+
+  /// Görsele dokununca tam ekran görüntüleyici.
+  void _openImage(ChatMessage message) {
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => _ImageViewerScreen(
+          bytes: message.mediaBytes,
+          senderName: message.senderName,
+        ),
+      ),
+    );
+  }
+
+  void _toast(String message) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(message)),
+    );
   }
 
   Future<void> _deleteChat() async {
@@ -615,7 +696,9 @@ class _ChatScreenState extends State<ChatScreen> {
                       return const Center(child: CircularProgressIndicator());
                     }
 
-                    final messages = snapshot.data!;
+                    final messages = snapshot.data!
+                        .where((m) => !_hiddenIds.contains(m.id))
+                        .toList();
                     _markReadIfNeeded(messages);
 
                     if (messages.isEmpty) {
@@ -646,9 +729,21 @@ class _ChatScreenState extends State<ChatScreen> {
                           return _SystemMessage(text: message.displayText);
                         }
 
+                        final canDeleteForEveryone = isMine ||
+                            (room != null &&
+                                room.moderatorlerMesajSilebilir &&
+                                room.yonetebilirMi(_myUid));
+
                         return _MessageBubble(
                           message: message,
                           isMine: isMine,
+                          canDeleteForEveryone: canDeleteForEveryone,
+                          onOpenImage: () => _openImage(message),
+                          onHideForMe: () => _hideForMe(message),
+                          onDeleteForEveryone: () => _deleteForEveryone(
+                            message,
+                            mine: isMine,
+                          ),
                           showAvatar: showAvatar,
                           showSender: room?.isDirect == false && showAvatar,
                           readByPeer: room == null
@@ -747,11 +842,22 @@ class _MessageBubble extends StatelessWidget {
     required this.onReply,
     required this.onReact,
     required this.onReport,
+    required this.onHideForMe,
+    required this.onDeleteForEveryone,
+    required this.onOpenImage,
+    this.canDeleteForEveryone = false,
     this.myReaction,
   });
 
   final ChatMessage message;
   final bool isMine;
+
+  /// "Herkesten sil" gösterilsin mi? (kendi mesajı veya yetkili moderatör)
+  final bool canDeleteForEveryone;
+
+  final VoidCallback onHideForMe;
+  final VoidCallback onDeleteForEveryone;
+  final VoidCallback onOpenImage;
   final bool showAvatar;
   final bool showSender;
   final bool readByPeer;
@@ -833,9 +939,15 @@ class _MessageBubble extends StatelessWidget {
           if (message.reply != null)
             _QuoteBlock(reply: message.reply!, isMine: isMine),
           if (hasMediaImage) ...[
-            ClipRRect(
-              borderRadius: BorderRadius.circular(14),
-              child: _ImageContent(bytes: message.mediaBytes),
+            GestureDetector(
+              onTap: onOpenImage,
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(14),
+                child: _ImageContent(
+                  bytes: message.mediaBytes,
+                  onOpen: onOpenImage,
+                ),
+              ),
             ),
             if (message.text.trim().isNotEmpty)
               Padding(
@@ -909,43 +1021,7 @@ class _MessageBubble extends StatelessWidget {
       ),
     );
 
-    if (hasMediaImage && message.text.trim().isEmpty) {
-      bubbleBody = Stack(
-        children: [
-          bubbleBody,
-          Positioned(
-            right: 10,
-            bottom: 10,
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
-              decoration: BoxDecoration(
-                color: Colors.black.withValues(alpha: 0.45),
-                borderRadius: BorderRadius.circular(10),
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(
-                    message.createdAt == null
-                        ? ''
-                        : DateFormat('HH:mm').format(message.createdAt!),
-                    style: const TextStyle(fontSize: 9.5, color: Colors.white),
-                  ),
-                  if (isMine) ...[
-                    const SizedBox(width: 4),
-                    Icon(
-                      readByPeer ? Icons.done_all_rounded : Icons.done_rounded,
-                      size: 13,
-                      color: readByPeer ? const Color(0xFF7ED0FF) : Colors.white,
-                    ),
-                  ],
-                ],
-              ),
-            ),
-          ),
-        ],
-      );
-    }
+    // Saat + okundu bilgisi tek yerde: balonun alt satırında.
 
     return Padding(
       padding: const EdgeInsets.only(bottom: 8),
@@ -1073,6 +1149,31 @@ class _MessageBubble extends StatelessWidget {
                   onReport();
                 },
               ),
+            ListTile(
+              leading: const Icon(Icons.visibility_off_outlined),
+              title: const Text('Benden sil'),
+              subtitle: const Text('Yalnızca sen görmezsin.'),
+              onTap: () {
+                Navigator.pop(sheetContext);
+                onHideForMe();
+              },
+            ),
+            if (canDeleteForEveryone && !message.deleted)
+              ListTile(
+                leading: Icon(
+                  Icons.delete_outline_rounded,
+                  color: sheetContext.colors.error,
+                ),
+                title: Text(
+                  'Herkesten sil',
+                  style: TextStyle(color: sheetContext.colors.error),
+                ),
+                subtitle: const Text('Tüm üyelerden kaldırılır.'),
+                onTap: () {
+                  Navigator.pop(sheetContext);
+                  onDeleteForEveryone();
+                },
+              ),
             const SizedBox(height: 8),
           ],
         ),
@@ -1124,9 +1225,12 @@ class _QuoteBlock extends StatelessWidget {
 }
 
 class _ImageContent extends StatelessWidget {
-  const _ImageContent({required this.bytes});
+  const _ImageContent({required this.bytes, this.onOpen});
 
   final Uint8List? bytes;
+
+  /// Görsele dokununca tam ekran açılır.
+  final VoidCallback? onOpen;
 
   @override
   Widget build(BuildContext context) {
@@ -1139,16 +1243,37 @@ class _ImageContent extends StatelessWidget {
       );
     }
 
-    return Image.memory(
-      data,
-      width: 230,
-      fit: BoxFit.cover,
-      gaplessPlayback: true,
-      errorBuilder: (_, _, _) => const SizedBox(
-        height: 140,
-        width: 200,
-        child: Center(child: Icon(Icons.broken_image_outlined)),
-      ),
+    return Stack(
+      children: [
+        Image.memory(
+          data,
+          width: 230,
+          fit: BoxFit.cover,
+          gaplessPlayback: true,
+          errorBuilder: (_, _, _) => const SizedBox(
+            height: 140,
+            width: 200,
+            child: Center(child: Icon(Icons.broken_image_outlined)),
+          ),
+        ),
+        if (onOpen != null)
+          Positioned(
+            right: 8,
+            top: 8,
+            child: Container(
+              padding: const EdgeInsets.all(5),
+              decoration: BoxDecoration(
+                color: Colors.black.withValues(alpha: 0.42),
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(
+                Icons.open_in_full_rounded,
+                size: 13,
+                color: Colors.white,
+              ),
+            ),
+          ),
+      ],
     );
   }
 }
@@ -1592,6 +1717,104 @@ class _SendButton extends StatelessWidget {
                 color: isActive ? Colors.white : context.muted,
                 size: 22,
               ),
+      ),
+    );
+  }
+}
+
+/// Fotoğraf tam ekran görüntüleyici.
+///
+/// Siyah zemin, yakınlaştırma (pinch) ve kaydırma; dokununca kapanır.
+class _ImageViewerScreen extends StatefulWidget {
+  const _ImageViewerScreen({this.bytes, this.senderName = ''});
+
+  final Uint8List? bytes;
+  final String senderName;
+
+  @override
+  State<_ImageViewerScreen> createState() => _ImageViewerScreenState();
+}
+
+class _ImageViewerScreenState extends State<_ImageViewerScreen> {
+  bool _chromeVisible = true;
+
+  @override
+  Widget build(BuildContext context) {
+    final data = widget.bytes;
+
+    return Scaffold(
+      backgroundColor: Colors.black,
+      body: SafeArea(
+        child: Stack(
+          children: [
+            Positioned.fill(
+              child: GestureDetector(
+                onTap: () => setState(() => _chromeVisible = !_chromeVisible),
+                child: data == null
+                    ? const Center(
+                        child: Icon(
+                          Icons.broken_image_outlined,
+                          color: Colors.white54,
+                          size: 42,
+                        ),
+                      )
+                    : InteractiveViewer(
+                        minScale: 1,
+                        maxScale: 5,
+                        child: Center(
+                          child: Image.memory(
+                            data,
+                            fit: BoxFit.contain,
+                            gaplessPlayback: true,
+                          ),
+                        ),
+                      ),
+              ),
+            ),
+            if (_chromeVisible) ...[
+              Positioned(
+                left: 8,
+                right: 8,
+                top: 4,
+                child: Row(
+                  children: [
+                    IconButton(
+                      onPressed: () => Navigator.of(context).maybePop(),
+                      icon: const Icon(
+                        Icons.close_rounded,
+                        color: Colors.white,
+                        size: 26,
+                      ),
+                    ),
+                    const Spacer(),
+                    if (widget.senderName.isNotEmpty)
+                      Padding(
+                        padding: const EdgeInsets.only(right: 12),
+                        child: Text(
+                          widget.senderName,
+                          style: const TextStyle(
+                            color: Colors.white70,
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+              const Positioned(
+                left: 0,
+                right: 0,
+                bottom: 16,
+                child: Text(
+                  'Yakınlaştırmak için iki parmakla aç · kapatmak için dokun',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(color: Colors.white38, fontSize: 11.5),
+                ),
+              ),
+            ],
+          ],
+        ),
       ),
     );
   }

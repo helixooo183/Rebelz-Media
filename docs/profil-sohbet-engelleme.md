@@ -50,7 +50,25 @@ rooms/{roomId}/messages/{msgId}
   senderId, senderName, senderPhotoUrl, text, type, createdAt
 ```
 
-## 2. Kullanıcı adı değişiklik kotası
+## 2. Profil fotoğrafı ve ad girişte korunur
+
+Google ile giriş yapıldığında hesabın fotoğrafı/adı `users/{uid}` dokümanına
+yazılır — **ama kullanıcının kendi seçimi ezilmez**:
+
+| Durum | Girişte davranış |
+|---|---|
+| Galeriden fotoğraf seçilmiş (`photoSource: custom`) | Google fotoğrafı **yazılmaz** |
+| Fotoğraf bilerek kaldırılmış (`photoSource: none`) | Google fotoğrafı **geri gelmez** |
+| Alan yok (eski kayıt) ama `photoUrl` `data:` ile başlıyor | Özel fotoğraf sayılır, korunur |
+| Henüz fotoğraf yok | Google fotoğrafı yazılır |
+| Kullanıcı adını uygulamada belirlemiş | Google adı **ezmez** |
+
+Karar tek yerde: `lib/features/profile/domain/avatar_policy.dart`
+(`AvatarPolicy.photoOnLogin` / `displayNameOnLogin`), testleri
+`test/profile_test.dart` içinde. `photoSource` alanı Firestore kurallarında
+`['custom', 'none']` dışında değer kabul etmez.
+
+## 3. Kullanıcı adı değişiklik kotası
 
 - **30 günlük dönemde en fazla 2 değişiklik.** Haklar bitince kullanıcı adı
   alanı kilitlenir ve kalan süre yazılır ("Yeni hak 12 gün sonra açılır").
@@ -61,7 +79,7 @@ rooms/{roomId}/messages/{msgId}
 - Alanlar: `usernameChanges` (0-2), `usernameWindowStart` (Timestamp).
   `firestore.rules` sayacın en fazla 1 artmasına izin verir.
 
-## 3. Şikayet ve destek
+## 4. Şikayet ve destek
 
 | Akış | Nereden | Kayıt |
 | --- | --- | --- |
@@ -76,7 +94,7 @@ rooms/{roomId}/messages/{msgId}
   sonraki adımda eklenebilir.
 - Destek ekranında taleplerin durumu (*İncelemede*) ve geçmişi görünür.
 
-## 4. Kanal ve grup ayarları
+## 5. Kanal ve grup ayarları
 
 Sohbet üst menüsü → **Kanal/grup ayarları** (kanal ve gruplarda görünür).
 
@@ -101,7 +119,7 @@ Sohbet üst menüsü → **Kanal/grup ayarları** (kanal ve gruplarda görünür
   `ownerUid` yalnızca mevcut sahip tarafından ve yeni sahip üye ise
   değiştirilebilir.
 
-## 5. Davet bağlantıları ve kanal arama
+## 6. Davet bağlantıları ve kanal arama
 
 ### Davet bağlantısı (kanal + grup)
 Sohbet üst menüsü → **Kanal/grup ayarları** → *Davet bağlantısı*:
@@ -127,6 +145,18 @@ açılır ve **Davet** ekranı gelir.
 - Elle girilen kodda otomatik katılma yapılmaz (`autoJoin` yalnızca
   bağlantıdan gelen akışta).
 
+### Kanal/grup fotoğrafı
+Ayarlar ekranındaki avatara dokun → galeriden fotoğraf seç.
+
+- Profil avatarıyla **aynı altyapı**: görsel 320 px / %68 JPEG'e küçültülür,
+  base64 `data:` URI'si olarak `rooms.photoUrl` alanına yazılır (Storage yok).
+- Üst sınır 400 000 karakter (~390 KB); tipik çıktı 10-25 KB.
+- Fotoğraf varsa dokunuşta "değiştir / kaldır" menüsü çıkar.
+- Yetki: yalnızca **sahip ve moderatörler**. Firestore kuralı da aynı şeyi
+  zorlar (`photoUrl` değişikliği `isRoomOwner() || isRoomMod()` ister), yani
+  arayüz atlatılsa bile üye fotoğrafı değiştiremez.
+- Avatar; sohbet ekranı, sohbet listesi ve kanal kartlarında otomatik güncellenir.
+
 ### Özel / herkese açık kanal
 Kanal sahibi ayarlarda **Özel kanal** anahtarını açar:
 - **Herkese açık** (varsayılan): Kanallar sekmesinde listelenir.
@@ -137,7 +167,7 @@ Kanal sahibi ayarlarda **Özel kanal** anahtarını açar:
 Kanallar sekmesinde üstte **arama çubuğu** vardır; kanal adı ve açıklamasında
 aranır. Sonuç yoksa doğrudan "Kod ile katıl" önerilir.
 
-## 6. Şikayet inceleme paneli (yönetici)
+## 7. Şikayet inceleme paneli (yönetici)
 
 Profil → **Şikayetler (yönetici)** (yalnızca yöneticide görünür).
 
@@ -156,13 +186,38 @@ Profil → **Şikayetler (yönetici)** (yalnızca yöneticide görünür).
   `status`/`reviewedAt`/`reviewedBy` alanlarında ve yalnızca yönetici
   tarafından yapılabilir.
 
-## 7. Kategori değiştirme (kaydırma)
+## 8. Kategori değiştirme (kaydırma)
 
 Sohbetler ekranında listeyi **sola/sağa kaydırarak** kategori değişir
 (Tümü ↔ Kişiler ↔ Gruplar). Alttaki noktalar hangi kategoride olduğunu
 gösterir, dokunarak da geçilebilir.
 
-## 8. Sohbet silme
+## 9. Mesaj silme ve fotoğraf görüntüleme
+
+Bir mesaja (metin, fotoğraf veya sesli mesaj) **uzun bas** → işlem menüsü:
+
+| Seçenek | Ne yapar | Kim görür |
+|---|---|---|
+| **Benden sil** | Mesajı yalnızca sende gizler | Sadece sen |
+| **Herkesten sil** | Mesaj tüm üyelerden kaldırılır | Herkes |
+| **Mesajı şikayet et** | Şikayet formu (başkasının mesajı) | Yönetici paneli |
+
+- **Benden sil** `users/{uid}/hiddenMessages/{roomId__messageId}` kaydı oluşturur;
+  sohbet akışı bu kimlikleri filtreler. Başka üye etkilenmez, kural gereği
+  kimse bu kaydı okuyamaz.
+- **Herkesten sil** kendi mesajında içeriği temizler ve "Bu mesaj silindi"
+  izi bırakır. Kanal/grupta `modsDeleteMessages` izni açıksa **sahip ve
+  moderatörler** başkasının mesajını da silebilir (doküman kaldırılır).
+- Onay penceresi vardır: yanlışlıkla silme olmaz.
+
+**Fotoğraf görüntüleme:** fotoğrafa dokun → tam ekran siyah görüntüleyici
+(pinch ile 1–5x yakınlaştırma, dokununca üst bar gizlenir, ✕ ile kapanır).
+
+**Saat/okundu bilgisi** her balonda tek yerde: balonun alt satırında. (Önceden
+fotoğraflarda hem görsel üzerinde hem altında ikinci bir saat+✓✓ vardı;
+kaldırıldı.)
+
+## 10. Sohbet silme
 
 Sohbet balonuna **uzun bas** ya da satırdaki **⋮** menüsü:
 
@@ -171,7 +226,7 @@ Sohbet balonuna **uzun bas** ya da satırdaki **⋮** menüsü:
 | **Sadece benden kaldır** | `rooms.hiddenFor`'a uid eklenir. Karşı taraf sohbeti görmeye devam eder. Karşı taraf yeni mesaj yazarsa sohbet ikinizde de geri gelir. |
 | **Sohbeti tamamen sil** | Tüm mesajlar (300'erli partiler) ve oda dokümanı silinir. Doğrudan sohbette iki taraf da silebilir; eski grup sohbetlerinde yalnızca oluşturan. |
 
-## 9. Engelleme
+## 11. Engelleme
 
 - Sohbet ekranı sağ üst menü → **Kişiyi engelle** (onay istenir).
 - Engellenen kişi:
@@ -184,7 +239,7 @@ Sohbet balonuna **uzun bas** ya da satırdaki **⋮** menüsü:
 - Engeli kaldırdıktan sonra sohbeti yeniden açmak için *Yeni sohbet* →
   kullanıcı adını ara.
 
-## 10. Kurulum adımları (tek seferlik)
+## 12. Kurulum adımları (tek seferlik)
 
 1. `firestore.rules` dosyasını yayınlayın:
    `firebase deploy --only firestore:rules` (ya da konsoldan yapıştırıp
@@ -199,7 +254,7 @@ Sohbet balonuna **uzun bas** ya da satırdaki **⋮** menüsü:
    (tipik 10-25 KB, üst sınır 400 000 karakter). Eski `https://` bağlantıları
    da desteklenmeye devam eder.
 
-## 11. Bilinen sınırlar
+## 13. Bilinen sınırlar
 
 - Engelleme, istemci + kural düzeyinde uygulanır; engellenen kişi teknik
   olarak yeni bir hesapla yazabilir. Kalıcı engelleme için Cloud Functions

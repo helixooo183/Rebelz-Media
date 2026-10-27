@@ -69,11 +69,13 @@ service cloud.firestore {
              'photoUrl', 'createdAt', 'lastSeenAt',
              'username', 'usernameLower', 'bio', 'avatarEmoji', 'avatarColor',
              'usernameChanges', 'usernameWindowStart',
-             'termsVersion', 'termsAcceptedAt',
+             'termsVersion', 'termsAcceptedAt', 'photoSource',
            ])
         && isNonEmptyString(request.resource.data.displayName, 80)
         && (!('photoUrl' in request.resource.data)
-              || isPhoto(request.resource.data.photoUrl));
+              || isPhoto(request.resource.data.photoUrl))
+        && (!('photoSource' in request.resource.data)
+              || request.resource.data.photoSource in ['custom', 'none']);
 
       // Sahibi profil alanlarını günceller; e-posta/uid gibi alanlar sabit.
       allow update: if isOwner(userId)
@@ -82,13 +84,16 @@ service cloud.firestore {
                'displayName', 'displayNameLower', 'photoUrl', 'lastSeenAt',
                'username', 'usernameLower', 'bio', 'avatarEmoji',
                'avatarColor', 'usernameChanges', 'usernameWindowStart',
-               'termsVersion', 'termsAcceptedAt',
+               'termsVersion', 'termsAcceptedAt', 'photoSource',
                'emailVerified',
              ])
         && isNonEmptyString(request.resource.data.displayName, 80)
         && kotaGecerli()
         && (!('photoUrl' in request.resource.data)
               || isPhoto(request.resource.data.photoUrl))
+        // Kullanıcı seçimi işareti: Google fotoğrafı bunu ezmez.
+        && (!('photoSource' in request.resource.data)
+              || request.resource.data.photoSource in ['custom', 'none'])
         && (!('usernameLower' in request.resource.data.diff(resource.data)
                 .affectedKeys())
             || isUsername(request.resource.data.usernameLower));
@@ -107,6 +112,20 @@ service cloud.firestore {
                'uid', 'email', 'version', 'accepted', 'platform', 'acceptedAt',
              ]);
         allow update, delete: if false;
+      }
+
+      // ------------------------------------------- benden sil (mesaj gizleme)
+      // "Benden sil" yalnızca sahibinin gördüğü bir işarettir; mesaj diğer
+      // üyeler için silinmez (bkz. ChatRepository.hideMessageForMe).
+      match /hiddenMessages/{hiddenId} {
+        allow read, delete: if isOwner(userId);
+        allow create: if isOwner(userId)
+          && isNonEmptyString(request.resource.data.roomId, 128)
+          && isNonEmptyString(request.resource.data.messageId, 128)
+          && request.resource.data.keys().hasOnly([
+               'roomId', 'messageId', 'createdAt',
+             ]);
+        allow update: if false;
       }
 
       // --------------------------------------------------------- engelleme
@@ -251,7 +270,12 @@ service cloud.firestore {
         // Özel/halka açık ayarını yalnızca sahip değiştirir.
         && (!('isPrivate' in request.resource.data.diff(resource.data)
                 .affectedKeys())
-            || isRoomOwner());
+            || isRoomOwner())
+        // Kanal/grup fotoğrafı: boyut sınırı + yalnızca sahip/moderatör.
+        && (!('photoUrl' in request.resource.data.diff(resource.data)
+                .affectedKeys())
+            || (isPhoto(request.resource.data.photoUrl)
+                && (isRoomOwner() || isRoomMod())));
 
       // Silme: DM'de iki taraf, grupta oluşturan, kanalda sahibi.
       allow delete: if signedIn()
