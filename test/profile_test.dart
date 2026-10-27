@@ -4,6 +4,7 @@ import 'package:sohbet/core/theme/app_theme.dart';
 import 'package:sohbet/features/chat/data/chat_repository.dart';
 import 'package:sohbet/features/chat/domain/models/chat_room.dart';
 import 'package:sohbet/features/chat/domain/models/room_invite.dart';
+import 'package:sohbet/features/moderation/data/moderation_repository.dart';
 import 'package:sohbet/features/profile/domain/legal_texts.dart';
 import 'package:sohbet/features/profile/domain/user_profile.dart';
 import 'package:sohbet/features/profile/presentation/terms_sheet.dart';
@@ -356,6 +357,34 @@ void main() {
       );
       expect(acik.herkeseAcikKanal, isTrue);
       expect(ozel.herkeseAcikKanal, isFalse);
+    });
+  });
+
+  group('Davet bağlantısı çözümleme', () {
+    test('özel şema bağlantısından kodu çıkarır', () {
+      expect(
+        inviteCodeFromUri(Uri.parse('rebelzmedia://katil/K7M2P9QD')),
+        'K7M2P9QD',
+      );
+    });
+
+    test('http bağlantısı ve büyük/küçük harf', () {
+      expect(
+        inviteCodeFromUri(Uri.parse('https://ornek.com/katil/k7m2p9qd')),
+        'K7M2P9QD',
+      );
+    });
+
+    test('davet içermeyen bağlantı null döner', () {
+      expect(inviteCodeFromUri(Uri.parse('https://ornek.com/akis')), isNull);
+      expect(inviteCodeFromUri(Uri.parse('rebelzmedia://katil')), isNull);
+    });
+
+    test('şikayet durum etiketleri', () {
+      expect(ReportStatus.label('open'), 'Açık');
+      expect(ReportStatus.label('resolved'), 'Çözüldü');
+      expect(ReportStatus.label('dismissed'), 'Reddedildi');
+      expect(ReportStatus.label('bilinmeyen'), 'Açık');
     });
   });
 }

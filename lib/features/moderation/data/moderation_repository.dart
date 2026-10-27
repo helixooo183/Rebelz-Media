@@ -26,6 +26,74 @@ abstract final class SupportTopics {
   ];
 }
 
+
+/// Şikayet durumları.
+abstract final class ReportStatus {
+  static const String open = 'open';
+  static const String resolved = 'resolved';
+  static const String dismissed = 'dismissed';
+
+  static String label(String status) => switch (status) {
+        resolved => 'Çözüldü',
+        dismissed => 'Reddedildi',
+        _ => 'Açık',
+      };
+}
+
+/// `reports/{id}` dokümanı (inceleme paneli için).
+class ReportItem {
+  const ReportItem({
+    required this.id,
+    required this.reporterUid,
+    required this.targetUid,
+    required this.reason,
+    required this.status,
+    this.reporterName = '',
+    this.targetName = '',
+    this.details = '',
+    this.roomId = '',
+    this.messageId = '',
+    this.messageSnippet = '',
+    this.createdAt,
+  });
+
+  final String id;
+  final String reporterUid;
+  final String reporterName;
+  final String targetUid;
+  final String targetName;
+  final String reason;
+  final String details;
+  final String status;
+  final String roomId;
+  final String messageId;
+  final String messageSnippet;
+  final DateTime? createdAt;
+
+  bool get isMesaj => messageId.isNotEmpty;
+  bool get isAcik => status == ReportStatus.open;
+  String get durumEtiketi => ReportStatus.label(status);
+
+  factory ReportItem.fromDoc(DocumentSnapshot<Map<String, dynamic>> doc) {
+    final data = doc.data() ?? const <String, dynamic>{};
+    String text(String key) => (data[key] as String?)?.trim() ?? '';
+    return ReportItem(
+      id: doc.id,
+      reporterUid: text('reporterUid'),
+      reporterName: text('reporterName'),
+      targetUid: text('targetUid'),
+      targetName: text('targetName'),
+      reason: text('reason'),
+      details: text('details'),
+      status: text('status').isEmpty ? ReportStatus.open : text('status'),
+      roomId: text('roomId'),
+      messageId: text('messageId'),
+      messageSnippet: text('messageSnippet'),
+      createdAt: (data['createdAt'] as Timestamp?)?.toDate(),
+    );
+  }
+}
+
 /// Gönderilen destek talebi (geçmiş listesi için).
 class SupportTicket {
   const SupportTicket({
@@ -154,6 +222,46 @@ class ModerationRepository {
     } catch (_) {
       return const Stream<List<SupportTicket>>.empty();
     }
+  }
+
+  // ---------------------------------------------------------------------------
+  // İnceleme (yönetici)
+  // ---------------------------------------------------------------------------
+
+  /// Oturumdaki kullanıcı yönetici mi? (`admins/{uid}` dokümanı varsa evet.)
+  Future<bool> isAdmin() async {
+    final uid = _auth.currentUser?.uid;
+    if (uid == null) return false;
+    try {
+      final doc = await _db.collection('admins').doc(uid).get();
+      return doc.exists;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  /// Tüm şikayetler (yalnızca yöneticiye açıktır — kurallar da bunu ister).
+  Stream<List<ReportItem>> watchReports() {
+    try {
+      return _reports
+          .orderBy('createdAt', descending: true)
+          .limit(100)
+          .snapshots()
+          .map((snapshot) =>
+              snapshot.docs.map(ReportItem.fromDoc).toList(growable: false));
+    } catch (_) {
+      return const Stream<List<ReportItem>>.empty();
+    }
+  }
+
+  /// Şikayetin durumunu günceller (açık / çözüldü / reddedildi).
+  Future<void> updateReportStatus(String reportId, String status) async {
+    _requireUid();
+    await _reports.doc(reportId).update({
+      'status': status,
+      'reviewedAt': FieldValue.serverTimestamp(),
+      'reviewedBy': _auth.currentUser?.uid ?? '',
+    });
   }
 
   String _snippet(String raw) {

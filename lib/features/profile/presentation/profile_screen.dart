@@ -6,6 +6,7 @@ import '../../../core/widgets/app_card.dart';
 import '../../../core/widgets/primary_button.dart';
 import '../../../core/widgets/user_avatar.dart';
 import '../../../core/widgets/verify_email_banner.dart';
+import '../../moderation/presentation/reports_screen.dart';
 import '../../moderation/presentation/support_screen.dart';
 import '../data/user_repository.dart';
 import '../domain/legal_texts.dart';
@@ -26,6 +27,25 @@ class ProfileScreen extends StatefulWidget {
 
 class _ProfileScreenState extends State<ProfileScreen> {
   bool _isSigningOut = false;
+
+  /// Yönetici mi? (`admins/{uid}`) — yalnızca true ise inceleme paneli
+  /// menüde görünür. Firebase yoksa null kalır.
+  bool _isAdmin = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadAdmin();
+  }
+
+  Future<void> _loadAdmin() async {
+    try {
+      final admin = await moderationRepositoryInstance.isAdmin();
+      if (mounted) setState(() => _isAdmin = admin);
+    } catch (_) {
+      // Test/önizleme: Firebase yok, yönetici değil.
+    }
+  }
 
   UserRepository? _users;
 
@@ -69,6 +89,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
       MaterialPageRoute<bool>(
         builder: (_) => EditProfileScreen(profile: profile),
       ),
+    );
+  }
+
+  Future<void> _openReports() async {
+    await Navigator.of(context).push(
+      MaterialPageRoute<void>(builder: (_) => const ReportsScreen()),
     );
   }
 
@@ -173,6 +199,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
               const SectionHeader(title: 'Yardım'),
               _SettingsGroup(
                 children: [
+                  if (_isAdmin)
+                    _ActionTile(
+                      icon: Icons.shield_outlined,
+                      label: 'Şikayetler (yönetici)',
+                      onTap: _openReports,
+                    ),
                   _ActionTile(
                     icon: Icons.support_agent_rounded,
                     label: 'Destek ve geri bildirim',

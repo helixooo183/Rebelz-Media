@@ -83,3 +83,27 @@ String normalizeInviteCode(String raw) {
   value = value.replaceAll(RegExp(r'[^A-Za-z0-9]'), '').toUpperCase();
   return value;
 }
+
+/// Bağlantıdan (`rebelzmedia://katil/ABCD2345`) davet kodunu çıkarır.
+///
+/// Özel şemada `host` bilgisi `path` içine karışabildiği için hem
+/// `katil/<kod>` hem `/katil/<kod>` biçimi denenir. Kod bulunamazsa `null`.
+String? inviteCodeFromUri(Uri uri) {
+  final raw = uri.toString();
+  if (!raw.toLowerCase().contains('katil')) return null;
+
+  // `rebelzmedia://katil/KOD` biçiminde "katil" host'ta kalır, http
+  // bağlantılarında ise yolun ilk parçasıdır — ikisini tek listede tara.
+  final segments = <String>[
+    if (uri.host.isNotEmpty) uri.host,
+    ...uri.pathSegments,
+  ];
+
+  for (var i = 0; i < segments.length; i++) {
+    if (segments[i].toLowerCase() == 'katil' && i + 1 < segments.length) {
+      final code = normalizeInviteCode(segments[i + 1]);
+      if (code.length >= 6) return code;
+    }
+  }
+  return null;
+}
