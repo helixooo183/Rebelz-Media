@@ -282,9 +282,10 @@ class ChatRepository {
     final uid = _requireUid();
     final ref = _rooms.doc(roomId).collection('messages').doc(messageId);
     final snapshot = await ref.get();
-    final current = (snapshot.data()?['reactions'] as Map?)
-        ?.cast<String, dynamic>()?[uid]
-        ?.toString();
+    final rawReactions = snapshot.data()?['reactions'];
+    final current = rawReactions is Map
+        ? rawReactions[uid]?.toString()
+        : null;
 
     await ref.set({
       'reactions.$uid':

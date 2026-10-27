@@ -8,7 +8,6 @@ import '../../features/chat/presentation/channels_screen.dart';
 import '../../features/chat/presentation/chat_screen.dart';
 import '../../features/chat/presentation/rooms_screen.dart';
 import '../../features/profile/presentation/profile_screen.dart';
-import '../theme/app_colors.dart';
 import '../widgets/home_shell.dart';
 import 'auth_notifier.dart';
 

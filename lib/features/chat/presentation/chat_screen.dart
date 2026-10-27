@@ -771,7 +771,7 @@ class _MessageBubble extends StatelessWidget {
             )
           else
             Padding(
-              padding: EdgeInsets.fromLTRB(2, 2, 2, 0),
+              padding: const EdgeInsets.fromLTRB(2, 2, 2, 0),
               child: Text(
                 message.displayText,
                 style: TextStyle(

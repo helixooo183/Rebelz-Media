@@ -15,7 +15,6 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:sohbet/core/theme/app_colors.dart';
 import 'package:sohbet/core/theme/app_theme.dart';
 import 'package:sohbet/features/auth/presentation/login_screen.dart';
 import 'package:sohbet/features/auth/presentation/register_screen.dart';

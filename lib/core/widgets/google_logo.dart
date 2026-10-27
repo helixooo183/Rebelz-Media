@@ -14,7 +14,7 @@ class GoogleLogo extends StatelessWidget {
     return SizedBox(
       height: size,
       width: size,
-      child: CustomPaint(painter: const _GoogleLogoPainter()),
+      child: const CustomPaint(painter: _GoogleLogoPainter()),
     );
   }
 }

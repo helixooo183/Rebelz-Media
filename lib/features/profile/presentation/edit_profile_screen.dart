@@ -166,7 +166,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
             maxLines: 1,
           ),
           const SizedBox(height: 6),
-          _Hint(
+          const _Hint(
             '3-20 karakter • küçük harf, rakam, alt çizgi. '
             'Başkaları seni bu adla bulur.',
           ),
@@ -236,7 +236,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
             maxLines: 1,
           ),
           const SizedBox(height: 6),
-          _Hint(
+          const _Hint(
             'Fotoğraf bağlantısı varsa avatar yerine o gösterilir. '
             'Boş bırakırsan seçtiğin emoji ve renk kullanılır.',
           ),
