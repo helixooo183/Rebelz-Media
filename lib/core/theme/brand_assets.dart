@@ -1,5 +1,3 @@
-import 'package:flutter/material.dart';
-
 /// Asset yolları tek yerde (pubspec: `assets/brand/`).
 abstract final class BrandAssets {
   /// Kırmızı fırça R + beyaz EBELZ (saydam zemin).
