@@ -2,7 +2,8 @@ import 'package:flutter/material.dart';
 
 import '../../../core/services/services.dart';
 import '../../../core/theme/app_colors.dart';
-import '../../../core/widgets/gradient_button.dart';
+import '../../../core/widgets/app_card.dart';
+import '../../../core/widgets/primary_button.dart';
 import '../../../core/widgets/user_avatar.dart';
 import '../../../core/widgets/verify_email_banner.dart';
 import '../data/user_repository.dart';
@@ -40,8 +41,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (dialogContext) => AlertDialog(
-        backgroundColor: AppColors.surface,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
         title: const Text('Çıkış yap'),
         content: const Text('Hesabından çıkmak istediğine emin misin?'),
         actions: [
@@ -94,178 +93,105 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
     final stream = _userRepo?.watchMyProfile();
 
-    return StreamBuilder<UserProfile?>(
-      stream: stream,
-      builder: (context, snapshot) {
-        final profile = snapshot.data;
-        final name = profile?.displayName ??
-            (user?.displayName?.trim().isNotEmpty == true
-                ? user!.displayName!.trim()
-                : currentUserNameOrNull ?? 'Kullanıcı');
-
-        return Scaffold(
-          appBar: AppBar(
-            title: const Text('Profil'),
-            actions: [
-              IconButton(
-                tooltip: 'Profili düzenle',
-                onPressed: profile == null ? null : () => _editProfile(profile),
-                icon: const Icon(Icons.edit_outlined),
-              ),
-              const SizedBox(width: 6),
-            ],
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Profil'),
+        actions: [
+          IconButton(
+            tooltip: 'Çıkış yap',
+            onPressed: _isSigningOut ? null : _signOut,
+            icon: const Icon(Icons.logout_rounded, size: 21),
           ),
-          body: ListView(
-            padding: const EdgeInsets.fromLTRB(20, 8, 20, 32),
+          const SizedBox(width: 6),
+        ],
+      ),
+      body: StreamBuilder<UserProfile?>(
+        stream: stream,
+        builder: (context, snapshot) {
+          final profile = snapshot.data;
+          final name = profile?.displayName ??
+              (user?.displayName?.trim().isNotEmpty == true
+                  ? user!.displayName!.trim()
+                  : currentUserNameOrNull ?? 'Kullanıcı');
+
+          return ListView(
+            padding: const EdgeInsets.fromLTRB(18, 6, 18, 40),
             children: [
-              Container(
-                padding: const EdgeInsets.all(20),
-                decoration: BoxDecoration(
-                  color: AppColors.surface,
-                  borderRadius: BorderRadius.circular(22),
-                  border: Border.all(color: AppColors.outline),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        UserAvatar(
-                          name: name,
-                          size: 64,
-                          highlighted: true,
-                          photoUrl: profile?.photoUrl,
-                          emoji: profile?.avatarEmoji,
-                          colorIndex: profile?.avatarColor ?? 0,
-                        ),
-                        const SizedBox(width: 16),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                name,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: const TextStyle(
-                                  fontSize: 18,
-                                  fontWeight: FontWeight.w700,
-                                ),
-                              ),
-                              const SizedBox(height: 2),
-                              Text(
-                                profile?.handle ?? '@kullanıcıadıyok',
-                                style: const TextStyle(
-                                  fontSize: 13,
-                                  color: AppColors.secondary,
-                                ),
-                              ),
-                              const SizedBox(height: 2),
-                              Text(
-                                user?.email ?? '—',
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: const TextStyle(
-                                  fontSize: 12.5,
-                                  color: AppColors.textSecondary,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ],
-                    ),
-                    if ((profile?.bio ?? '').isNotEmpty) ...[
-                      const SizedBox(height: 14),
-                      Text(
-                        profile!.bio,
-                        style: const TextStyle(
-                          fontSize: 13.5,
-                          height: 1.45,
-                          color: AppColors.textSecondary,
-                        ),
-                      ),
-                    ],
-                    const SizedBox(height: 16),
-                    OutlinedButton.icon(
-                      onPressed:
-                          profile == null ? null : () => _editProfile(profile),
-                      icon: const Icon(Icons.tune, size: 18),
-                      label: const Text('Profili düzenle'),
-                    ),
-                  ],
-                ),
+              _ProfileHeader(
+                name: name,
+                profile: profile,
+                email: user?.email ?? '',
+                onEdit: profile == null ? null : () => _editProfile(profile),
               ),
-              const VerifyEmailBanner(showWhenVerified: false),
-              const SizedBox(height: 20),
-              const _SectionLabel('Hesap'),
-              const SizedBox(height: 10),
-              _SettingsTile(
-                icon: Icons.login_outlined,
-                label: 'Giriş yöntemi',
-                value: signInMethod,
+              const SizedBox(height: 14),
+              const VerifyEmailBanner(),
+              const SectionHeader(title: 'Hesap'),
+              _SettingsGroup(
+                children: [
+                  _SettingsTile(
+                    icon: Icons.alternate_email_rounded,
+                    label: 'Kullanıcı adı',
+                    value: (profile?.username.isEmpty ?? true)
+                        ? 'Belirlenmedi'
+                        : profile!.handle,
+                  ),
+                  _SettingsTile(
+                    icon: Icons.login_rounded,
+                    label: 'Giriş yöntemi',
+                    value: signInMethod,
+                  ),
+                  _SettingsTile(
+                    icon: Icons.mark_email_read_outlined,
+                    label: 'E-posta doğrulandı',
+                    value: (user?.emailVerified ?? false) ? 'Evet' : 'Hayır',
+                  ),
+                ],
               ),
-              const SizedBox(height: 10),
-              _SettingsTile(
-                icon: Icons.alternate_email,
-                label: 'Kullanıcı adı',
-                value: profile?.username.isEmpty ?? true
-                    ? 'Belirlenmedi'
-                    : profile!.handle,
+              const SectionHeader(title: 'Güvenlik ve gizlilik'),
+              _SettingsGroup(
+                children: [
+                  _ActionTile(
+                    icon: Icons.block_rounded,
+                    label: 'Engellenenler',
+                    onTap: _openBlocked,
+                  ),
+                  _ActionTile(
+                    icon: Icons.description_outlined,
+                    label: 'Kullanım koşulları',
+                    trailing: 'Sürüm ${LegalTexts.version}',
+                    onTap: () => showTermsSheet(context),
+                  ),
+                  _SettingsTile(
+                    icon: Icons.fact_check_outlined,
+                    label: 'Koşullar kabul edildi',
+                    value: profile?.termsAccepted == true
+                        ? _formatDate(profile!.termsAcceptedAt)
+                        : 'Hayır',
+                  ),
+                ],
               ),
-              const SizedBox(height: 10),
-              _SettingsTile(
-                icon: Icons.verified_user_outlined,
-                label: 'E-posta doğrulandı',
-                value: (user?.emailVerified ?? false) ? 'Evet' : 'Hayır',
-              ),
-              const SizedBox(height: 10),
-              _SettingsTile(
-                icon: Icons.badge_outlined,
-                label: 'Kullanıcı kimliği',
-                value: user?.uid ?? '—',
-              ),
-              const SizedBox(height: 20),
-              const _SectionLabel('Güvenlik ve gizlilik'),
-              const SizedBox(height: 10),
-              _ActionTile(
-                icon: Icons.block_outlined,
-                label: 'Engellenenler',
-                onTap: _openBlocked,
-              ),
-              const SizedBox(height: 10),
-              _ActionTile(
-                icon: Icons.description_outlined,
-                label: 'Kullanım koşulları',
-                trailing: 'Sürüm ${LegalTexts.version}',
-                onTap: () => showTermsSheet(context),
-              ),
-              const SizedBox(height: 10),
-              _SettingsTile(
-                icon: Icons.fact_check_outlined,
-                label: 'Koşullar kabul edildi',
-                value: profile?.termsAccepted == true
-                    ? _formatDate(profile!.termsAcceptedAt)
-                    : 'Hayır',
-              ),
-              const SizedBox(height: 28),
-              GradientButton(
+              const SizedBox(height: 22),
+              PrimaryButton(
                 label: 'Çıkış yap',
-                icon: Icons.logout,
+                icon: Icons.logout_rounded,
                 isLoading: _isSigningOut,
                 onPressed: _signOut,
               ),
-              const SizedBox(height: 24),
-              const Text(
-                'Sohbet • v0.2.0\n'
+              const SizedBox(height: 22),
+              Text(
+                'Rebelz Media · v0.3.0\n'
                 'Firebase Auth (Google + E-posta) · Cloud Firestore',
                 textAlign: TextAlign.center,
-                style: TextStyle(fontSize: 12, color: AppColors.textMuted),
+                style: TextStyle(
+                  fontSize: 11.5,
+                  height: 1.5,
+                  color: context.colors.onSurfaceVariant,
+                ),
               ),
             ],
-          ),
-        );
-      },
+          );
+        },
+      ),
     );
   }
 
@@ -278,19 +204,127 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 }
 
-class _SectionLabel extends StatelessWidget {
-  const _SectionLabel(this.text);
+class _ProfileHeader extends StatelessWidget {
+  const _ProfileHeader({
+    required this.name,
+    required this.profile,
+    required this.email,
+    required this.onEdit,
+  });
 
-  final String text;
+  final String name;
+  final UserProfile? profile;
+  final String email;
+  final VoidCallback? onEdit;
 
   @override
   Widget build(BuildContext context) {
-    return Text(
-      text,
-      style: const TextStyle(
-        fontSize: 13,
-        fontWeight: FontWeight.w600,
-        color: AppColors.textMuted,
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    name,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: context.texts.headlineMedium,
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    profile?.handle ?? '@kullanıcıadıyok',
+                    style: TextStyle(
+                      fontSize: 13.5,
+                      fontWeight: FontWeight.w600,
+                      color: context.colors.primary,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 12),
+            UserAvatar(
+              name: name,
+              size: 66,
+              photoUrl: profile?.photoUrl,
+              emoji: profile?.avatarEmoji,
+              colorIndex: profile?.avatarColor ?? 0,
+              highlighted: true,
+            ),
+          ],
+        ),
+        if ((profile?.bio ?? '').isNotEmpty) ...[
+          const SizedBox(height: 10),
+          Text(
+            profile!.bio,
+            style: TextStyle(fontSize: 14, height: 1.5, color: context.muted),
+          ),
+        ],
+        if (email.isNotEmpty) ...[
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              Icon(
+                Icons.mail_outline_rounded,
+                size: 15,
+                color: context.colors.onSurfaceVariant,
+              ),
+              const SizedBox(width: 6),
+              Expanded(
+                child: Text(
+                  email,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(fontSize: 12.5, color: context.muted),
+                ),
+              ),
+            ],
+          ),
+        ],
+        const SizedBox(height: 16),
+        OutlinedButton.icon(
+          onPressed: onEdit,
+          icon: const Icon(Icons.tune_rounded, size: 18),
+          label: const Text('Profili düzenle'),
+          style: OutlinedButton.styleFrom(
+            minimumSize: const Size(double.infinity, 46),
+            side: BorderSide(color: context.line),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(14),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _SettingsGroup extends StatelessWidget {
+  const _SettingsGroup({required this.children});
+
+  final List<Widget> children;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: BoxDecoration(
+        color: context.card,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: context.line),
+      ),
+      child: Column(
+        children: [
+          for (var i = 0; i < children.length; i++) ...[
+            children[i],
+            if (i != children.length - 1)
+              Divider(height: 1, indent: 50, color: context.line),
+          ],
+        ],
       ),
     );
   }
@@ -311,40 +345,23 @@ class _ActionTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Material(
-      color: AppColors.surface,
-      borderRadius: BorderRadius.circular(16),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(16),
-        onTap: onTap,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 15),
-          child: Row(
-            children: [
-              Icon(icon, size: 20, color: AppColors.textSecondary),
-              const SizedBox(width: 14),
-              Expanded(
-                child: Text(
-                  label,
-                  style: const TextStyle(fontSize: 14.5),
-                ),
+    return InkWell(
+      onTap: onTap,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 15),
+        child: Row(
+          children: [
+            Icon(icon, size: 19, color: context.colors.onSurfaceVariant),
+            const SizedBox(width: 14),
+            Expanded(child: Text(label, style: const TextStyle(fontSize: 14.5))),
+            if (trailing != null)
+              Text(
+                trailing!,
+                style: TextStyle(fontSize: 12, color: context.muted),
               ),
-              if (trailing != null)
-                Text(
-                  trailing!,
-                  style: const TextStyle(
-                    fontSize: 12,
-                    color: AppColors.textMuted,
-                  ),
-                ),
-              const SizedBox(width: 6),
-              const Icon(
-                Icons.chevron_right,
-                size: 20,
-                color: AppColors.textMuted,
-              ),
-            ],
-          ),
+            const SizedBox(width: 6),
+            Icon(Icons.chevron_right_rounded, size: 19, color: context.muted),
+          ],
         ),
       ),
     );
@@ -364,25 +381,13 @@ class _SettingsTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-      decoration: BoxDecoration(
-        color: AppColors.surface,
-        borderRadius: BorderRadius.circular(16),
-      ),
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 15),
       child: Row(
         children: [
-          Icon(icon, size: 20, color: AppColors.textSecondary),
+          Icon(icon, size: 19, color: context.colors.onSurfaceVariant),
           const SizedBox(width: 14),
-          Expanded(
-            child: Text(
-              label,
-              style: const TextStyle(
-                fontSize: 14.5,
-                color: AppColors.textPrimary,
-              ),
-            ),
-          ),
+          Expanded(child: Text(label, style: const TextStyle(fontSize: 14.5))),
           const SizedBox(width: 10),
           Flexible(
             child: Text(
@@ -390,10 +395,7 @@ class _SettingsTile extends StatelessWidget {
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               textAlign: TextAlign.right,
-              style: const TextStyle(
-                fontSize: 13,
-                color: AppColors.textMuted,
-              ),
+              style: TextStyle(fontSize: 12.5, color: context.muted),
             ),
           ),
         ],

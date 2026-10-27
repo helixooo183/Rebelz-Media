@@ -22,44 +22,47 @@ class TermsScreen extends StatelessWidget {
       appBar: AppBar(
         title: const Text(LegalTexts.title),
         leading: IconButton(
-          icon: const Icon(Icons.close),
+          icon: const Icon(Icons.close_rounded),
           onPressed: () => Navigator.of(context).maybePop(),
         ),
       ),
       body: ListView(
-        padding: const EdgeInsets.fromLTRB(20, 8, 20, 40),
+        padding: const EdgeInsets.fromLTRB(20, 8, 20, 44),
         children: [
-          const Text(
-            'Sürüm ${LegalTexts.version}',
-            style: TextStyle(fontSize: 12, color: AppColors.textMuted),
-          ),
-          const SizedBox(height: 12),
-          const Text(
-            LegalTexts.intro,
-            style: TextStyle(
-              fontSize: 14,
-              height: 1.5,
-              color: AppColors.textSecondary,
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+            decoration: BoxDecoration(
+              color: context.colors.primaryContainer,
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Text(
+              'Sürüm ${LegalTexts.version}',
+              style: TextStyle(
+                fontSize: 11.5,
+                fontWeight: FontWeight.w700,
+                color: context.colors.primary,
+              ),
             ),
           ),
+          const SizedBox(height: 14),
+          Text(
+            LegalTexts.intro,
+            style: TextStyle(fontSize: 14, height: 1.55, color: context.muted),
+          ),
           for (final section in LegalTexts.sections) ...[
-            const SizedBox(height: 20),
+            const SizedBox(height: 22),
             Text(
               section.$1,
               style: const TextStyle(
                 fontSize: 15,
-                fontWeight: FontWeight.w600,
-                color: AppColors.textPrimary,
+                fontWeight: FontWeight.w700,
+                letterSpacing: -0.2,
               ),
             ),
-            const SizedBox(height: 6),
+            const SizedBox(height: 7),
             Text(
               section.$2,
-              style: const TextStyle(
-                fontSize: 14,
-                height: 1.5,
-                color: AppColors.textSecondary,
-              ),
+              style: TextStyle(fontSize: 14, height: 1.55, color: context.muted),
             ),
           ],
         ],
@@ -84,25 +87,24 @@ class TermsCheckbox extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.fromLTRB(8, 6, 12, 6),
+      padding: const EdgeInsets.fromLTRB(6, 4, 12, 4),
       decoration: BoxDecoration(
-        color: AppColors.surface,
+        color: context.card,
         borderRadius: BorderRadius.circular(14),
         border: Border.all(
-          color: value ? AppColors.primary : AppColors.outline,
+          color: value ? context.colors.primary : context.line,
         ),
       ),
       child: Row(
-        crossAxisAlignment: CrossAxisAlignment.center,
         children: [
           Checkbox(
             value: value,
-            isError: false,
             onChanged: enabled ? (v) => onChanged(v ?? false) : null,
           ),
           Expanded(
             child: GestureDetector(
               onTap: enabled ? () => onChanged(!value) : null,
+              behavior: HitTestBehavior.opaque,
               child: Padding(
                 padding: const EdgeInsets.symmetric(vertical: 8),
                 child: Column(
@@ -111,22 +113,20 @@ class TermsCheckbox extends StatelessWidget {
                     Text(
                       LegalTexts.checkboxLabel,
                       style: TextStyle(
-                        fontSize: 13,
+                        fontSize: 12.5,
                         height: 1.4,
-                        color: enabled
-                            ? AppColors.textPrimary
-                            : AppColors.textMuted,
+                        color: enabled ? context.colors.onSurface : context.muted,
                       ),
                     ),
                     const SizedBox(height: 2),
                     InkWell(
                       onTap: () => showTermsSheet(context),
-                      child: const Text(
+                      child: Text(
                         'Metni oku ›',
                         style: TextStyle(
                           fontSize: 12.5,
-                          fontWeight: FontWeight.w600,
-                          color: AppColors.secondary,
+                          fontWeight: FontWeight.w700,
+                          color: context.colors.primary,
                         ),
                       ),
                     ),

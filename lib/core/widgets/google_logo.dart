@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 
-/// Google "G" logosu — dört renkli yay + mavi çubuk.
-/// Harici görsel kullanmadan çizilir (her yoğunlukta net görünür).
+/// Google'ın resmî çok renkli "G" işareti.
+///
+/// Harici görsel veya bağımlılık kullanmadan markanın geometrisine göre
+/// çizilir: dört renkli halka + ortadan sağa uzanan mavi çubuk.
 class GoogleLogo extends StatelessWidget {
   const GoogleLogo({super.key, this.size = 20});
 
@@ -12,44 +14,52 @@ class GoogleLogo extends StatelessWidget {
     return SizedBox(
       height: size,
       width: size,
-      child: CustomPaint(painter: _GoogleLogoPainter()),
+      child: CustomPaint(painter: const _GoogleLogoPainter()),
     );
   }
 }
 
 class _GoogleLogoPainter extends CustomPainter {
-  static const _blue = Color(0xFF4285F4);
-  static const _red = Color(0xFFEA4335);
-  static const _yellow = Color(0xFFFBBC05);
-  static const _green = Color(0xFF34A853);
+  const _GoogleLogoPainter();
+
+  static const Color _blue = Color(0xFF4285F4);
+  static const Color _red = Color(0xFFEA4335);
+  static const Color _yellow = Color(0xFFFBBC05);
+  static const Color _green = Color(0xFF34A853);
 
   @override
   void paint(Canvas canvas, Size size) {
-    final stroke = size.width * 0.22;
+    final stroke = size.width * 0.235;
+    final center = Offset(size.width / 2, size.height / 2);
     final rect = Rect.fromCircle(
-      center: Offset(size.width / 2, size.height / 2),
+      center: center,
       radius: (size.width - stroke) / 2,
     );
 
-    Paint arcPaint(Color color) => Paint()
+    Paint arc(Color color) => Paint()
       ..color = color
       ..style = PaintingStyle.stroke
       ..strokeWidth = stroke
       ..strokeCap = StrokeCap.butt;
 
-    // Açı 0 = saat 3 yönü; pozitif yön saat yönü.
-    canvas.drawArc(rect, -2.28, 1.30, false, arcPaint(_red)); // üst
-    canvas.drawArc(rect, -0.98, 0.86, false, arcPaint(_blue)); // sağ üst
-    canvas.drawArc(rect, 0.42, 1.92, false, arcPaint(_green)); // alt-sağ
-    canvas.drawArc(rect, 2.34, 1.72, false, arcPaint(_yellow)); // sol
+    // Açılar radyan; 0 = saat 3 yönü, pozitif = saat yönü.
+    canvas.drawArc(rect, 3.49, 2.10, false, arc(_red)); // üst
+    canvas.drawArc(rect, -0.70, 1.22, false, arc(_blue)); // sağ üst
+    canvas.drawArc(rect, 0.52, 2.10, false, arc(_green)); // alt
+    canvas.drawArc(rect, 2.62, 0.87, false, arc(_yellow)); // sol alt
 
-    // G'nin yatay çubuğu (sağ orta).
-    final barHeight = stroke * 0.92;
-    final barLeft = size.width / 2 - stroke * 0.1;
-    final barRight = size.width - stroke * 0.55;
-    canvas.drawRect(
-      Rect.fromLTRB(barLeft, size.height / 2 - barHeight / 2, barRight,
-          size.height / 2 + barHeight / 2),
+    // G'nin yatay mavi çubuğu (sağ orta).
+    final barHeight = stroke * 0.96;
+    final barTop = center.dy - barHeight / 2;
+    final barLeft = center.dx - stroke * 0.06;
+    final barRight = size.width - stroke * 0.28;
+
+    canvas.drawRRect(
+      RRect.fromRectAndCorners(
+        Rect.fromLTRB(barLeft, barTop, barRight, barTop + barHeight),
+        topRight: Radius.circular(barHeight * 0.16),
+        bottomRight: Radius.circular(barHeight * 0.16),
+      ),
       Paint()..color = _blue,
     );
   }

@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import '../../features/auth/presentation/login_screen.dart';
 import '../../features/auth/presentation/register_screen.dart';
 import '../../features/auth/presentation/splash_screen.dart';
+import '../../features/chat/presentation/channels_screen.dart';
 import '../../features/chat/presentation/chat_screen.dart';
 import '../../features/chat/presentation/rooms_screen.dart';
 import '../../features/profile/presentation/profile_screen.dart';
@@ -19,6 +20,7 @@ abstract final class AppRoutes {
   static const login = '/login';
   static const register = '/register';
   static const chats = '/chats';
+  static const channels = '/channels';
   static const profile = '/profile';
 
   static String chat(String roomId, {required String name}) =>
@@ -85,6 +87,14 @@ final GoRouter appRouter = GoRouter(
         StatefulShellBranch(
           routes: [
             GoRoute(
+              path: AppRoutes.channels,
+              builder: (context, state) => const ChannelsScreen(),
+            ),
+          ],
+        ),
+        StatefulShellBranch(
+          routes: [
+            GoRoute(
               path: AppRoutes.profile,
               builder: (context, state) => const ProfileScreen(),
             ),
@@ -120,7 +130,9 @@ class _RouteErrorScreen extends StatelessWidget {
           child: Text(
             'Sayfa bulunamadı\n\n$message',
             textAlign: TextAlign.center,
-            style: const TextStyle(color: AppColors.textSecondary),
+            style: TextStyle(
+              color: Theme.of(context).colorScheme.onSurfaceVariant,
+            ),
           ),
         ),
       ),

@@ -42,17 +42,21 @@ class SohbetApp extends StatelessWidget {
     // FirebaseAuth.instance ister ve bu durumda hata verir.
     if (!firebaseReady) {
       return MaterialApp(
-        title: 'Sohbet',
+        title: 'Rebelz Media',
         debugShowCheckedModeBanner: false,
-        theme: AppTheme.dark,
+        theme: AppTheme.light,
+        darkTheme: AppTheme.dark,
+        themeMode: ThemeMode.system,
         home: const SetupScreen(),
       );
     }
 
     return MaterialApp.router(
-      title: 'Sohbet',
+      title: 'Rebelz Media',
       debugShowCheckedModeBanner: false,
-      theme: AppTheme.dark,
+      theme: AppTheme.light,
+      darkTheme: AppTheme.dark,
+      themeMode: ThemeMode.system,
       routerConfig: appRouter,
     );
   }

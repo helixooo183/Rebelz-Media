@@ -1,16 +1,14 @@
-import 'dart:async';
-
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
 import '../domain/models/chat_message.dart';
 import '../domain/models/chat_room.dart';
 
-/// Sohbet verileriyle ilgili tüm Firestore işlemleri.
+/// Sohbet, mesaj ve kanal verileriyle ilgili tüm Firestore işlemleri.
 ///
 /// Model:
-///   rooms/{roomId}                     memberIds, type ('dm'|'group'), hiddenFor
-///   rooms/{roomId}/messages/{msgId}    mesajlar
+///   rooms/{roomId}                        memberIds, type, typing, readAt…
+///   rooms/{roomId}/messages/{msgId}       metin / fotoğraf / ses
 class ChatRepository {
   ChatRepository({FirebaseFirestore? firestore, FirebaseAuth? auth})
       : _db = firestore ?? FirebaseFirestore.instance,
@@ -28,40 +26,49 @@ class ChatRepository {
   // Okuma
   // ---------------------------------------------------------------------------
 
-  /// Oturum açan kullanıcının sohbetleri (en son mesaj üstte).
-  ///
-  /// Kaldırılan sohbetler `hiddenFor` alanında tutulur; karşı taraf yeni
-  /// mesaj yazdığında alan temizlenir ve sohbet geri gelir.
+  /// Oturum açan kullanıcının sohbetleri (kanallar hariç, en yeni üstte).
   Stream<List<ChatRoom>> watchRooms() {
     final uid = _myUid;
     if (uid == null) return Stream<List<ChatRoom>>.value(const <ChatRoom>[]);
 
-    // Not: `arrayContains` + `orderBy` bileşik indeks gerektirdiği için
-    // sıralama istemci tarafında yapılır (ilk kurulumda ek adım gerekmez).
     return _rooms
         .where('memberIds', arrayContains: uid)
-        .limit(50)
+        .limit(60)
         .snapshots()
         .map((snapshot) {
       final rooms = <ChatRoom>[];
       for (final doc in snapshot.docs) {
         final data = doc.data();
+        final room = ChatRoom.fromDoc(doc, viewerUid: uid);
+        if (room.isChannel) continue;
+
         final hiddenFor =
             (data['hiddenFor'] as List<dynamic>? ?? const <dynamic>[])
                 .whereType<String>();
         if (hiddenFor.contains(uid)) continue;
-        rooms.add(ChatRoom.fromDoc(doc, viewerUid: uid));
+        rooms.add(room);
       }
-      rooms.sort((a, b) {
-        final aTime = a.lastMessageAt ?? a.createdAt ?? DateTime(1970);
-        final bTime = b.lastMessageAt ?? b.createdAt ?? DateTime(1970);
-        return bTime.compareTo(aTime);
-      });
+      _sortRooms(rooms);
       return rooms;
     });
   }
 
-  /// Tek sohbetin canlı kaydı (karşı tarafın adı/fotoğrafı değişirse güncellenir).
+  /// Herkese açık kanallar.
+  Stream<List<ChatRoom>> watchChannels() {
+    final uid = _myUid;
+    return _rooms
+        .where('type', isEqualTo: RoomType.channel)
+        .limit(60)
+        .snapshots()
+        .map((snapshot) {
+      final channels = snapshot.docs
+          .map((doc) => ChatRoom.fromDoc(doc, viewerUid: uid))
+          .toList();
+      _sortRooms(channels);
+      return channels;
+    });
+  }
+
   Stream<ChatRoom?> watchRoom(String roomId) {
     return _rooms.doc(roomId).snapshots().map((doc) {
       if (!doc.exists) return null;
@@ -79,7 +86,15 @@ class ChatRepository {
         .map((snapshot) => snapshot.docs.map(ChatMessage.fromDoc).toList());
   }
 
-  /// Doğrudan sohbet doküman kimliği (iki uid sıralı yazılır, tek kayıt olur).
+  void _sortRooms(List<ChatRoom> rooms) {
+    rooms.sort((a, b) {
+      final aTime = a.lastMessageAt ?? a.createdAt ?? DateTime(1970);
+      final bTime = b.lastMessageAt ?? b.createdAt ?? DateTime(1970);
+      return bTime.compareTo(aTime);
+    });
+  }
+
+  /// Doğrudan sohbet doküman kimliği (iki uid sıralı yazılır).
   static String directChatId(String uidA, String uidB) {
     final ids = [uidA, uidB]..sort();
     return 'dm_${ids[0]}_${ids[1]}';
@@ -89,10 +104,6 @@ class ChatRepository {
   // Sohbet başlatma
   // ---------------------------------------------------------------------------
 
-  /// Verilen kullanıcıyla doğrudan sohbeti açar (yoksa oluşturur).
-  ///
-  /// Sohbetin `name`/`photoUrl` alanları karşı tarafın profiline göre
-  /// tazelenir, böylece adını değiştiren kullanıcı listede doğru görünür.
   Future<String> openDirectChat({
     required String peerUid,
     required String peerName,
@@ -106,8 +117,6 @@ class ChatRepository {
     final roomId = directChatId(uid, peerUid);
     final roomRef = _rooms.doc(roomId);
 
-    // Var olmayan dokümanı okumak güvenlik kuralı tarafından reddedilebilir;
-    // bu yüzden "yok" kabul edip sohbeti oluştururuz.
     var exists = false;
     try {
       exists = (await roomRef.get()).exists;
@@ -121,7 +130,7 @@ class ChatRepository {
       await roomRef.set({
         'name': peerName.trim().isEmpty ? 'Sohbet' : peerName.trim(),
         'photoUrl': peerPhotoUrl.trim(),
-        'type': 'dm',
+        'type': RoomType.direct,
         'createdBy': uid,
         'memberIds': [uid, peerUid],
         'hiddenFor': <String>[],
@@ -134,9 +143,8 @@ class ChatRepository {
       return roomId;
     }
 
-    // Mevcut sohbet: iki tarafın güncel ad/fotoğrafını yaz, gizlemeyi kaldır.
     await roomRef.set({
-      'type': 'dm',
+      'type': RoomType.direct,
       'photoUrl': peerPhotoUrl.trim(),
       'name': peerName.trim().isEmpty ? 'Sohbet' : peerName.trim(),
       'hiddenFor': FieldValue.arrayRemove([uid]),
@@ -152,22 +160,38 @@ class ChatRepository {
   // Mesaj gönderme
   // ---------------------------------------------------------------------------
 
-  /// Mesajı yazar; boş mesaj gönderilmez. Hata durumunda [ChatException].
-  Future<void> sendMessage(String roomId, String text) async {
+  /// Metin, fotoğraf veya sesli mesaj gönderir.
+  Future<void> sendMessage(
+    String roomId, {
+    String text = '',
+    String type = MessageType.text,
+    String mediaBase64 = '',
+    String mediaMime = '',
+    int durationMs = 0,
+    ReplyInfo? reply,
+  }) async {
     final uid = _requireUid();
     final body = text.trim();
-    if (body.isEmpty) return;
+
+    if (type == MessageType.text && body.isEmpty) return;
     if (body.length > 2000) {
       throw const ChatException('Mesaj en fazla 2000 karakter olabilir.');
+    }
+    if (mediaBase64.length > 850000) {
+      throw const ChatException('Medya çok büyük. Daha küçük bir dosya seç.');
     }
 
     final user = _auth.currentUser!;
     final roomRef = _rooms.doc(roomId);
     final roomSnapshot = await roomRef.get();
-    final room = roomSnapshot.exists
-        ? ChatRoom.fromDoc(roomSnapshot)
-        : null;
-    if (room == null || !room.hasMember(uid)) {
+    final room = roomSnapshot.exists ? ChatRoom.fromDoc(roomSnapshot) : null;
+
+    if (room == null) throw const ChatException('Sohbet bulunamadı.');
+    if (room.isChannel) {
+      if (room.ownerUid != uid) {
+        throw const ChatException('Bu kanalda yalnızca sahibi paylaşım yapar.');
+      }
+    } else if (!room.hasMember(uid)) {
       throw const ChatException('Bu sohbete erişimin yok.');
     }
 
@@ -182,7 +206,6 @@ class ChatRepository {
         ? 'Kullanıcı'
         : user.displayName!.trim();
 
-    // Gönderenin güncel fotoğrafı (avatar için kopya).
     var senderPhotoUrl = user.photoURL ?? '';
     try {
       final profile = await _db.collection('users').doc(uid).get();
@@ -192,23 +215,163 @@ class ChatRepository {
       // Profil okunamazsa Auth fotoğrafıyla devam.
     }
 
+    final preview = switch (type) {
+      MessageType.image => '📷 Fotoğraf',
+      MessageType.audio => '🎙 Sesli mesaj',
+      _ => body,
+    };
+
     final batch = _db.batch();
     batch.set(roomRef.collection('messages').doc(), {
       'senderId': uid,
       'senderName': senderName,
       'senderPhotoUrl': senderPhotoUrl,
       'text': body,
-      'type': 'text',
+      'type': type,
+      'mediaBase64': mediaBase64,
+      'mediaMime': mediaMime,
+      'durationMs': durationMs,
+      'readBy': <String>[uid],
+      'deleted': false,
+      if (reply != null) 'reply': reply.toMap(),
       'createdAt': FieldValue.serverTimestamp(),
     });
+
     batch.set(roomRef, {
-      'lastMessage': body,
+      'lastMessage': preview,
       'lastMessageAt': FieldValue.serverTimestamp(),
-      // Silinmiş sohbeti iki taraf için de geri getir.
+      'lastSenderId': uid,
       'hiddenFor': <String>[],
+      'typing.$uid': FieldValue.delete(),
     }, SetOptions(merge: true));
 
     await batch.commit();
+  }
+
+  /// "yazıyor…" göstergesi (gönderen kendi alanını yönetir).
+  Future<void> setTyping(String roomId, bool typing) async {
+    final uid = _myUid;
+    if (uid == null) return;
+    try {
+      await _rooms.doc(roomId).set({
+        'typing.$uid':
+            typing ? FieldValue.serverTimestamp() : FieldValue.delete(),
+      }, SetOptions(merge: true));
+    } catch (_) {
+      // Gösterge kritik değil.
+    }
+  }
+
+  /// Sohbeti okundu olarak işaretler (✓✓ için).
+  Future<void> markRead(String roomId) async {
+    final uid = _myUid;
+    if (uid == null) return;
+    try {
+      await _rooms.doc(roomId).set({
+        'readAt.$uid': FieldValue.serverTimestamp(),
+      }, SetOptions(merge: true));
+    } catch (_) {
+      // Sessiz geç.
+    }
+  }
+
+  /// Tepki ekler; aynı tepki tekrar seçilirse kaldırır.
+  Future<void> toggleReaction(
+    String roomId,
+    String messageId,
+    String emoji,
+  ) async {
+    final uid = _requireUid();
+    final ref = _rooms.doc(roomId).collection('messages').doc(messageId);
+    final snapshot = await ref.get();
+    final current = (snapshot.data()?['reactions'] as Map?)
+        ?.cast<String, dynamic>()?[uid]
+        ?.toString();
+
+    await ref.set({
+      'reactions.$uid':
+          current == emoji ? FieldValue.delete() : emoji,
+    }, SetOptions(merge: true));
+  }
+
+  /// Mesajı siler (içerik temizlenir, "silindi" olarak görünür).
+  Future<void> deleteMessage(String roomId, String messageId) async {
+    _requireUid();
+    await _rooms.doc(roomId).collection('messages').doc(messageId).set({
+      'text': '',
+      'mediaBase64': '',
+      'mediaMime': '',
+      'durationMs': 0,
+      'deleted': true,
+      'editedAt': FieldValue.serverTimestamp(),
+    }, SetOptions(merge: true));
+  }
+
+  /// Kendi metin mesajını düzenler.
+  Future<void> editMessage(
+    String roomId,
+    String messageId,
+    String text,
+  ) async {
+    _requireUid();
+    final body = text.trim();
+    if (body.isEmpty) return;
+    await _rooms.doc(roomId).collection('messages').doc(messageId).set({
+      'text': body,
+      'editedAt': FieldValue.serverTimestamp(),
+    }, SetOptions(merge: true));
+  }
+
+  // ---------------------------------------------------------------------------
+  // Kanallar
+  // ---------------------------------------------------------------------------
+
+  /// Yeni yayın kanalı oluşturur (sahibi otomatik abone olur).
+  Future<String> createChannel({
+    required String name,
+    String about = '',
+  }) async {
+    final uid = _requireUid();
+    final trimmed = name.trim();
+    if (trimmed.length < 3) {
+      throw const ChatException('Kanal adı en az 3 karakter olmalı.');
+    }
+
+    final ref = _rooms.doc();
+    await ref.set({
+      'name': trimmed,
+      'about': about.trim(),
+      'type': RoomType.channel,
+      'createdBy': uid,
+      'ownerUid': uid,
+      'memberIds': [uid],
+      'subscriberCount': 1,
+      'photoUrl': '',
+      'hiddenFor': <String>[],
+      'lastMessage': '',
+      'lastMessageAt': FieldValue.serverTimestamp(),
+      'createdAt': FieldValue.serverTimestamp(),
+      'memberNames': {uid: (_auth.currentUser?.displayName ?? '').trim()},
+    });
+    return ref.id;
+  }
+
+  /// Kanala abone olur.
+  Future<void> joinChannel(String roomId) async {
+    final uid = _requireUid();
+    await _rooms.doc(roomId).set({
+      'memberIds': FieldValue.arrayUnion([uid]),
+      'subscriberCount': FieldValue.increment(1),
+    }, SetOptions(merge: true));
+  }
+
+  /// Kanaldan ayrılır.
+  Future<void> leaveChannel(String roomId) async {
+    final uid = _requireUid();
+    await _rooms.doc(roomId).set({
+      'memberIds': FieldValue.arrayRemove([uid]),
+      'subscriberCount': FieldValue.increment(-1),
+    }, SetOptions(merge: true));
   }
 
   // ---------------------------------------------------------------------------
@@ -235,7 +398,6 @@ class ChatRepository {
   // Silme
   // ---------------------------------------------------------------------------
 
-  /// Sohbeti yalnızca bu kullanıcı için kaldırır (karşı taraf etkilenmez).
   Future<void> hideChat(String roomId) async {
     final uid = _requireUid();
     await _rooms.doc(roomId).set({
@@ -243,17 +405,12 @@ class ChatRepository {
     }, SetOptions(merge: true));
   }
 
-  /// Sohbeti ve tüm mesajlarını kalıcı olarak siler.
-  ///
-  /// Doğrudan sohbette iki taraf da silebilir; grup sohbetinde yalnızca
-  /// oluşturan (kural tarafından da doğrulanır).
   Future<void> deleteChat(String roomId) async {
     _requireUid();
     final roomRef = _rooms.doc(roomId);
 
     while (true) {
-      final snapshot =
-          await roomRef.collection('messages').limit(300).get();
+      final snapshot = await roomRef.collection('messages').limit(300).get();
       if (snapshot.docs.isEmpty) break;
 
       final batch = _db.batch();

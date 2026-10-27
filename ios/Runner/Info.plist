@@ -2,6 +2,12 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Sesli mesaj kaydetmek için mikrofona erişim gerekir.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>Fotoğraf göndermek için galeriye erişim gerekir.</string>
+	<key>NSCameraUsageDescription</key>
+	<string>Fotoğraf çekmek için kameraya erişim gerekir.</string>
 	<key>CFBundleDevelopmentRegion</key>
 	<string>$(DEVELOPMENT_LANGUAGE)</string>
 	<key>CFBundleDisplayName</key>

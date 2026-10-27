@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../../core/services/services.dart';
 import '../../../core/theme/app_colors.dart';
+import '../../../core/widgets/app_card.dart';
 import '../../../core/widgets/empty_state.dart';
 import '../../../core/widgets/user_avatar.dart';
 import '../data/user_repository.dart';
@@ -73,13 +74,15 @@ class _BlockedUsersScreenState extends State<BlockedUsersScreen> {
           ? const Center(child: CircularProgressIndicator())
           : _error != null
               ? EmptyState(
-                  icon: Icons.cloud_off_outlined,
+                  icon: Icons.cloud_off_rounded,
                   title: 'Yüklenemedi',
                   message: _error!,
+                  actionLabel: 'Tekrar dene',
+                  onAction: _load,
                 )
               : _profiles.isEmpty
                   ? const EmptyState(
-                      icon: Icons.block_outlined,
+                      icon: Icons.block_rounded,
                       title: 'Engellenen kimse yok',
                       message: 'Bir sohbetteki menüden kişiyi engelleyebilirsin. '
                           'Engellediğin kişiler burada listelenir.',
@@ -87,23 +90,20 @@ class _BlockedUsersScreenState extends State<BlockedUsersScreen> {
                   : ListView.separated(
                       padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
                       itemCount: _profiles.length,
-                      separatorBuilder: (_, _) => const SizedBox(height: 10),
+                      separatorBuilder: (_, _) => const SizedBox(height: 8),
                       itemBuilder: (context, index) {
                         final profile = _profiles[index];
-                        return Container(
+                        return AppCard(
+                          radius: 18,
                           padding: const EdgeInsets.symmetric(
                             horizontal: 14,
                             vertical: 12,
-                          ),
-                          decoration: BoxDecoration(
-                            color: AppColors.surface,
-                            borderRadius: BorderRadius.circular(16),
                           ),
                           child: Row(
                             children: [
                               UserAvatar(
                                 name: profile.displayName,
-                                size: 42,
+                                size: 44,
                                 photoUrl: profile.photoUrl,
                                 emoji: profile.avatarEmoji,
                                 colorIndex: profile.avatarColor,
@@ -124,9 +124,9 @@ class _BlockedUsersScreenState extends State<BlockedUsersScreen> {
                                     ),
                                     Text(
                                       profile.handle,
-                                      style: const TextStyle(
+                                      style: TextStyle(
                                         fontSize: 12.5,
-                                        color: AppColors.textSecondary,
+                                        color: context.muted,
                                       ),
                                     ),
                                   ],
