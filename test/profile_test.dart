@@ -335,8 +335,9 @@ void main() {
         roomName: 'Rebelz Duyuru',
         roomType: 'channel',
       );
-      expect(invite.link, 'rebelzmedia://katil/K7M2P9QD');
-      expect(invite.shareText, contains('rebelzmedia://katil/K7M2P9QD'));
+      // Paylaşılan bağlantı artık https; özel şema yalnızca yönlendirme için.
+      expect(invite.link, 'https://rebelz-media.web.app/katil/?k=K7M2P9QD');
+      expect(invite.shareText, contains('https://'));
       expect(invite.shareText, contains('kanalına'));
     });
 
@@ -502,6 +503,58 @@ void main() {
         AvatarPolicy.sourceFor(' data:image/jpeg;base64,AA '),
         AvatarPolicy.sourceCustom,
       );
+    });
+  });
+
+  group('Davet bağlantısı https ve katıl/ayrıl', () {
+    test('paylaşılan bağlantı https ve kod içerir', () {
+      final link = RoomInvite.linkFor('K7M2P9QD');
+      expect(link.startsWith('https://'), isTrue);
+      expect(link.contains('katil'), isTrue);
+      expect(link.contains('K7M2P9QD'), isTrue);
+    });
+
+    test('https bağlantısından kod okunur (?k=)', () {
+      expect(
+        inviteCodeFromUri(
+          Uri.parse('https://rebelz-media.web.app/katil/?k=k7m2p9qd'),
+        ),
+        'K7M2P9QD',
+      );
+    });
+
+    test('yol biçimi ve özel şema hâlâ çalışıyor', () {
+      expect(
+        inviteCodeFromUri(Uri.parse('https://ornek.com/katil/K7M2P9QD')),
+        'K7M2P9QD',
+      );
+      expect(
+        inviteCodeFromUri(Uri.parse(RoomInvite.deepLinkFor('K7M2P9QD'))),
+        'K7M2P9QD',
+      );
+    });
+
+    test('özel şema bağlantısı https ile aynı kodu taşır', () {
+      expect(RoomInvite.deepLinkFor('ABCD2345'), 'rebelzmedia://katil/ABCD2345');
+    });
+
+    test('kanalda sahip/moderatör/üye yetkileri', () {
+      const channel = ChatRoom(
+        id: 'c1',
+        name: 'Duyuru',
+        createdBy: 'sahip',
+        ownerUid: 'sahip',
+        memberIds: ['sahip', 'mod', 'uye'],
+        type: RoomType.channel,
+        roles: {'mod': ChatRoom.roleModerator},
+      );
+
+      expect(channel.sahipMi('sahip'), isTrue);
+      expect(channel.moderatorMu('mod'), isTrue);
+      expect(channel.hasMember('uye'), isTrue);
+      expect(channel.hasMember('yabanci'), isFalse);
+      // Sahip gidebilmek için önce devretmeli; arayüz bunu engeller.
+      expect(channel.yonetebilirMi('uye'), isFalse);
     });
   });
 }

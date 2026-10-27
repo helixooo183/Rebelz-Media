@@ -6,8 +6,10 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 ///
 /// Firestore: `room_invites/{code}` → `roomId`, `createdBy`, `createdAt`,
 /// `type`. Kod 8 karakterdir ve karıştırılabilen karakterler (0/O, 1/I)
-/// kullanılmaz. Bağlantı biçimi: `rebelzmedia://katil/<code>` ya da
-/// uygulama içinde "Kod ile katıl" alanına yazılan `<code>`.
+/// kullanılmaz. Paylaşılan bağlantı **https**'tir
+/// (`https://helixooo183.github.io/Rebelz-Media/katil/?k=<code>`); bu adres
+/// `rebelzmedia://katil/<code>` şemasına yönlendirir. Uygulama içinde "Kod ile
+/// katıl" alanına doğrudan `<code>` da yazılabilir.
 class RoomInvite {
   const RoomInvite({
     required this.code,
@@ -30,11 +32,19 @@ class RoomInvite {
 
   final DateTime? createdAt;
 
-  /// Paylaşılabilir bağlantı.
+  /// Paylaşılabilir bağlantı (https — WhatsApp/SMS/e-postada tıklanabilir).
   String get link => linkFor(code);
 
-  /// Kodu bağlantıya çevirir.
-  static String linkFor(String code) => 'rebelzmedia://katil/$code';
+  /// Yönlendirme sayfasının kökü (Firebase Hosting → `docs/katil/index.html`).
+  /// Kod `?k=` parametresiyle taşınır. Yayınlamak için:
+  /// `firebase deploy --only hosting`
+  static const String webBase = 'https://rebelz-media.web.app';
+
+  /// Uygulamayı doğrudan açan özel şema.
+  static String deepLinkFor(String code) => 'rebelzmedia://katil/$code';
+
+  /// Kodu paylaşılabilir https bağlantısına çevirir.
+  static String linkFor(String code) => '$webBase/katil/?k=$code';
 
   /// Paylaşım metni (WhatsApp, e-posta vb. için).
   String get shareText {
@@ -89,6 +99,12 @@ String normalizeInviteCode(String raw) {
 /// Özel şemada `host` bilgisi `path` içine karışabildiği için hem
 /// `katil/<kod>` hem `/katil/<kod>` biçimi denenir. Kod bulunamazsa `null`.
 String? inviteCodeFromUri(Uri uri) {
+  // https bağlantısı: .../katil/?k=KOD (veya ?kod= / ?code=)
+  for (final key in const ['k', 'kod', 'code']) {
+    final fromQuery = normalizeInviteCode(uri.queryParameters[key] ?? '');
+    if (fromQuery.length >= 6) return fromQuery;
+  }
+
   final raw = uri.toString();
   if (!raw.toLowerCase().contains('katil')) return null;
 

@@ -272,13 +272,53 @@ class _ChatScreenState extends State<ChatScreen> {
     }
   }
 
+  /// 5 saniyelik "Geri al" bildirimi (ekranın altından çıkar).
+  void _showUndo({
+    required String text,
+    required Future<void> Function() onUndo,
+    String undoLabel = 'Geri al',
+  }) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(
+        SnackBar(
+          content: Text(text),
+          duration: const Duration(seconds: 5),
+          behavior: SnackBarBehavior.floating,
+          margin: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
+          action: SnackBarAction(
+            label: undoLabel,
+            onPressed: () async {
+              try {
+                await onUndo();
+                if (mounted) _toast('Mesaj geri alındı.');
+              } catch (e) {
+                if (mounted) _toast('Geri alınamadı: $e');
+              }
+            },
+          ),
+        ),
+      );
+  }
+
   /// "Benden sil": mesaj yalnızca bu kullanıcıda kaybolur.
   Future<void> _hideForMe(ChatMessage message) async {
     try {
       await _repository.hideMessageForMe(widget.roomId, message.id);
       if (!mounted) return;
       setState(() => _hiddenIds = {..._hiddenIds, message.id});
-      _toast('Mesaj senden gizlendi.');
+      _showUndo(
+        text: 'Mesaj senden gizlendi.',
+        onUndo: () async {
+          await _repository.unhideMessage(widget.roomId, message.id);
+          if (!mounted) return;
+          setState(() => _hiddenIds = {..._hiddenIds}..remove(message.id));
+        },
+      );
     } catch (e) {
       _toast('Mesaj gizlenemedi: $e');
     }
@@ -292,8 +332,10 @@ class _ChatScreenState extends State<ChatScreen> {
         title: const Text('Herkesten silinsin mi?'),
         content: Text(
           mine
-              ? 'Mesaj tüm üyelerden silinecek. Bu işlem geri alınamaz.'
-              : 'Bu mesaj tüm üyelerden silinecek (moderatör işlemi).',
+              ? 'Mesaj tüm üyelerden silinecek. 5 saniye içinde geri '
+                  'alabilirsin.'
+              : 'Bu mesaj tüm üyelerden silinecek (moderatör işlemi). '
+                  '5 saniye içinde geri alabilirsin.',
         ),
         actions: [
           TextButton(
@@ -315,7 +357,11 @@ class _ChatScreenState extends State<ChatScreen> {
       } else {
         await _repository.deleteMessageAsModerator(widget.roomId, message.id);
       }
-      _toast('Mesaj herkesten silindi.');
+      if (!mounted) return;
+      _showUndo(
+        text: 'Mesaj herkesten silindi.',
+        onUndo: () => _repository.restoreMessage(widget.roomId, message),
+      );
     } catch (e) {
       _toast('Mesaj silinemedi: $e');
     }
@@ -338,6 +384,101 @@ class _ChatScreenState extends State<ChatScreen> {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text(message)),
     );
+  }
+
+  /// Kanala katılır (keşfette görünen herkese açık kanallar).
+  Future<void> _joinRoom(ChatRoom room) async {
+    setState(() => _isBusy = true);
+    try {
+      await _repository.joinChannel(room.id);
+      _toast('${room.name} kanalına katıldın.');
+    } catch (e) {
+      _toast('Katılınamadı: $e');
+    } finally {
+      if (mounted) setState(() => _isBusy = false);
+    }
+  }
+
+  /// Kanaldan/gruptan ayrılır (sahip önce devretmeli).
+  Future<void> _leaveRoom(ChatRoom room) async {
+    final isChannel = room.isChannel;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: Text('${room.name} ${isChannel ? 'kanalından' : 'grubundan'} ayrıl'),
+        content: Text(
+          room.sahipMi(_myUid)
+              ? 'Sahibi olduğun için önce sahipliği devretmelisin '
+                  '(Ayarlar → Sahipliği devret).'
+              : 'Sohbet listeden kalkar, istediğin zaman yeniden katılabilirsin.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('Vazgeç'),
+          ),
+          if (!room.sahipMi(_myUid))
+            FilledButton(
+              onPressed: () => Navigator.pop(dialogContext, true),
+              child: const Text('Ayrıl'),
+            ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+
+    setState(() => _isBusy = true);
+    try {
+      await _repository.leaveRoom(room.id);
+      if (!mounted) return;
+      _toast('${room.name} ${isChannel ? 'kanalından' : 'grubundan'} ayrıldın.');
+      if (Navigator.of(context).canPop()) Navigator.of(context).pop();
+    } catch (e) {
+      _toast('Ayrılınamadı: $e');
+    } finally {
+      if (mounted) setState(() => _isBusy = false);
+    }
+  }
+
+  /// Kanalı/gruhu tamamen siler (yalnızca sahibi). Geri alınamaz.
+  Future<void> _deleteRoom(ChatRoom room) async {
+    final kind = room.isChannel ? 'Kanal' : 'Grup';
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: Text('$kind silinsin mi?'),
+        content: Text(
+          '${room.name} ve içindeki tüm mesajlar kalıcı olarak silinecek. '
+          'Aboneler/üyeler için de kaybolur. Bu işlem geri alınamaz.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('Vazgeç'),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(
+              backgroundColor: Theme.of(dialogContext).colorScheme.error,
+            ),
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: const Text('Kalıcı sil'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+
+    setState(() => _isBusy = true);
+    try {
+      await _repository.deleteChat(room.id);
+      if (!mounted) return;
+      _toast('$kind silindi.');
+      if (Navigator.of(context).canPop()) Navigator.of(context).pop();
+    } catch (e) {
+      _toast('$kind silinemedi: $e');
+    } finally {
+      if (mounted) setState(() => _isBusy = false);
+    }
   }
 
   Future<void> _deleteChat() async {
@@ -616,6 +757,12 @@ class _ChatScreenState extends State<ChatScreen> {
                       _openSettings();
                     case 'report':
                       _reportPeer(room);
+                    case 'join':
+                      if (room != null) _joinRoom(room);
+                    case 'leave':
+                      if (room != null) _leaveRoom(room);
+                    case 'deleteRoom':
+                      if (room != null) _deleteRoom(room);
                   }
                 },
                 itemBuilder: (_) => [
@@ -632,6 +779,42 @@ class _ChatScreenState extends State<ChatScreen> {
                         ],
                       ),
                     ),
+                  // Kanal/grup: üye değilsem katıl, üyeysem ayrıl.
+                  if (room != null && !room.isDirect) ...[
+                    if (!room.hasMember(_myUid))
+                      const PopupMenuItem(
+                        value: 'join',
+                        child: Row(
+                          children: [
+                            Icon(Icons.login_rounded, size: 19),
+                            SizedBox(width: 10),
+                            Text('Kanala katıl'),
+                          ],
+                        ),
+                      )
+                    else if (!room.sahipMi(_myUid))
+                      const PopupMenuItem(
+                        value: 'leave',
+                        child: Row(
+                          children: [
+                            Icon(Icons.logout_rounded, size: 19),
+                            SizedBox(width: 10),
+                            Text('Kanaldan ayrıl'),
+                          ],
+                        ),
+                      ),
+                    if (room.sahipMi(_myUid))
+                      const PopupMenuItem(
+                        value: 'deleteRoom',
+                        child: Row(
+                          children: [
+                            Icon(Icons.delete_forever_rounded, size: 19),
+                            SizedBox(width: 10),
+                            Text('Kanalı sil'),
+                          ],
+                        ),
+                      ),
+                  ],
                   if (_peerUid != null)
                     const PopupMenuItem(
                       value: 'report',

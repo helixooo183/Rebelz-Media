@@ -1,5 +1,25 @@
 {
   "firestore": {
     "rules": "firestore.rules"
+  },
+  "hosting": {
+    "public": "docs",
+    "ignore": [
+      "firebase.json",
+      "**/.*",
+      "**/node_modules/**"
+    ],
+    "rewrites": [
+      { "source": "/katil", "destination": "/katil/index.html" },
+      { "source": "/katil/**", "destination": "/katil/index.html" }
+    ],
+    "headers": [
+      {
+        "source": "/katil/**",
+        "headers": [
+          { "key": "Cache-Control", "value": "no-cache, max-age=0" }
+        ]
+      }
+    ]
   }
 }

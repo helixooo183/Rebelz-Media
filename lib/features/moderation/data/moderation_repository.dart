@@ -211,14 +211,23 @@ class ModerationRepository {
     final uid = _auth.currentUser?.uid;
     if (uid == null) return const Stream<List<SupportTicket>>.empty();
     try {
+      // NOT: `orderBy('createdAt')` ile birleşince Firestore bileşik indeks
+      // istiyor (FAILED_PRECONDITION). Tek alanlı eşitlik sorgusu + istemci
+      // sıralaması hem indeks gerektirmez hem de aynı sonucu verir.
       return _support
           .where('uid', isEqualTo: uid)
-          .orderBy('createdAt', descending: true)
-          .limit(20)
+          .limit(30)
           .snapshots()
-          .map((snapshot) => snapshot.docs
-              .map(SupportTicket.fromDoc)
-              .toList(growable: false));
+          .map((snapshot) {
+            final tickets =
+                snapshot.docs.map(SupportTicket.fromDoc).toList();
+            tickets.sort((a, b) {
+              final aTime = a.createdAt ?? DateTime(1970);
+              final bTime = b.createdAt ?? DateTime(1970);
+              return bTime.compareTo(aTime);
+            });
+            return List<SupportTicket>.unmodifiable(tickets);
+          });
     } catch (_) {
       return const Stream<List<SupportTicket>>.empty();
     }

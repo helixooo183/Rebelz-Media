@@ -196,7 +196,11 @@ service cloud.firestore {
                      /blocked/$(request.auth.uid)));
       }
 
-      allow get: if isMember();
+      // Üye olmayan da kanal/grup bilgisini (ad, açıklama, üye sayısı)
+      // okuyabilmeli: davetle katılma ve keşfet akışı buna bağlı. Mesajlar
+      // yine yalnızca üyelere açıktır. Doğrudan sohbetler gizli kalır.
+      allow get: if isMember()
+        || (signedIn() && resource.data.type != 'dm');
 
       // Sorgu güvenliği: sohbetler `memberIds array-contains uid`, kanallar
       // `type == 'channel'` filtresiyle çekilir; iki kural da kanıtlanabilir.
@@ -227,6 +231,35 @@ service cloud.firestore {
             || request.resource.data.ownerUid == request.auth.uid)
         && (request.resource.data.type == 'channel'
             || !('ownerUid' in request.resource.data));
+
+      // Kanala/grupa KATILMA ve AYRILMA.
+      //
+      // Üye olmayan biri `update` yapamadığı için (aşağıdaki kural `isMember()`
+      // ister) katılma isteği PERMISSION_DENIED alıyordu. Bu blok yalnızca
+      // "kendini ekle/çıkar" işlemine izin verir:
+      //   * yalnızca `memberIds`, `subscriberCount`, `hiddenFor`, `memberNames`
+      //     alanları değişebilir,
+      //   * kullanıcı yalnızca KENDİ uid'sini ekleyip çıkarabilir
+      //     (başkasını ekleme/çıkarma yine aşağıdaki yönetim kuralına tabidir).
+      allow update: if signedIn()
+        && request.resource.data.diff(resource.data).affectedKeys()
+             .hasOnly(['memberIds', 'subscriberCount', 'hiddenFor',
+                       'memberNames'])
+        && (
+             // katılma: uid eklendi, başka kimse eklenmedi
+             (!(request.auth.uid in resource.data.memberIds)
+               && request.auth.uid in request.resource.data.memberIds
+               && request.resource.data.memberIds
+                    .hasAll(resource.data.memberIds)
+               && request.resource.data.memberIds.size()
+                    == resource.data.memberIds.size() + 1)
+             ||
+             // ayrılma: yalnızca uid çıkarıldı
+             (request.auth.uid in resource.data.memberIds
+               && !(request.auth.uid in request.resource.data.memberIds)
+               && request.resource.data.memberIds.size()
+                    == resource.data.memberIds.size() - 1)
+           );
 
       // Son mesaj, üye listesi, gizleme, "yazıyor…" ve okundu bilgisi.
       allow update: if isMember()
@@ -297,7 +330,7 @@ service cloud.firestore {
           && request.resource.data.keys().hasOnly([
                'senderId', 'senderName', 'senderPhotoUrl', 'text', 'type',
                'mediaBase64', 'mediaMime', 'durationMs', 'reply', 'reactions',
-               'readBy', 'deleted', 'editedAt', 'createdAt',
+               'readBy', 'deleted', 'editedAt', 'createdAt', 'deletedBy',
              ])
           && isNonEmptyString(request.resource.data.senderName, 80)
           && request.resource.data.type in ['text', 'image', 'audio', 'system']
@@ -317,14 +350,25 @@ service cloud.firestore {
           // Kanala yalnızca sahibi/moderatörü yazar (izin açıksa herkes).
           && (!isChannel() || isRoomOwner() || isRoomMod() || !onlyModsPost());
 
-        // Tepki, okundu, düzenleme ve "silindi" işaretleri.
+        // Tepki, okundu, düzenleme, "silindi" işareti ve geri alma.
         allow update: if isMember()
           && request.resource.data.diff(resource.data).affectedKeys()
                .hasOnly(['reactions', 'readBy', 'text', 'editedAt', 'deleted',
-                         'mediaBase64', 'mediaMime', 'durationMs'])
+                         'mediaBase64', 'mediaMime', 'durationMs',
+                         'deletedBy'])
           && (request.resource.data.diff(resource.data).affectedKeys()
                 .hasOnly(['reactions', 'readBy'])
-              || resource.data.senderId == request.auth.uid);
+              // Gönderen kendi mesajını düzenler/siler/geri alır.
+              || resource.data.senderId == request.auth.uid
+              // Yetkili moderatör/sahip yalnızca içerik alanlarını temizleyip
+              // "silindi" işaretleyebilir (veya geri alabilir).
+              || (room().get('permissions', {})
+                      .get('modsDeleteMessages', false) == true
+                  && (isRoomOwner() || isRoomMod())
+                  && request.resource.data.diff(resource.data).affectedKeys()
+                       .hasOnly(['text', 'mediaBase64', 'mediaMime',
+                                 'durationMs', 'deleted', 'deletedBy',
+                                 'editedAt'])));
 
         // Sohbeti silme akışı için üyeler mesajları kaldırabilir.
         // Kanal/gruplarda moderatörler yalnızca izin verildiyse silebilir.
