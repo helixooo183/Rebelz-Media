@@ -15,6 +15,11 @@ class UserRepository {
   final FirebaseFirestore _db;
   final FirebaseAuth _auth;
 
+  /// Avatar alanının (`photoUrl`) üst sınırı: base64 data URI ~390 KB.
+  /// Galeriden seçilen fotoğraf 320 px'e küçültüldüğü için tipik değer
+  /// 10-25 KB; sınır yalnızca yanlış kullanımı engeller.
+  static const int maxPhotoLength = 400000;
+
   CollectionReference<Map<String, dynamic>> get _users =>
       _db.collection('users');
 
@@ -124,13 +129,50 @@ class UserRepository {
     final usernameError = Username.validate(normalizedUsername);
     if (usernameError != null) throw ProfileException(usernameError);
 
+    final trimmedPhoto = photoUrl.trim();
+    if (trimmedPhoto.length > maxPhotoLength) {
+      throw const ProfileException(
+        'Profil fotoğrafı çok büyük. Galeriden daha küçük bir fotoğraf seç.',
+      );
+    }
+
     final userRef = _users.doc(uid);
     final usernameRef = _usernames.doc(normalizedUsername);
 
     await _db.runTransaction((transaction) async {
       final currentUserDoc = await transaction.get(userRef);
+      final currentData = currentUserDoc.data() ?? const <String, dynamic>{};
       final previousUsername =
-          (currentUserDoc.data()?['usernameLower'] as String?)?.trim() ?? '';
+          (currentData['usernameLower'] as String?)?.trim() ?? '';
+
+      // ---- kullanıcı adı değişiklik kotası -------------------------------
+      // 30 günlük dönemde en fazla 2 değişiklik. İlk kez ad almak (henüz ad
+      // yokken seçmek) hak harcamaz.
+      final isUsernameChange =
+          previousUsername.isNotEmpty && previousUsername != normalizedUsername;
+
+      var usedChanges = (currentData['usernameChanges'] as num?)?.toInt() ?? 0;
+      var windowStart =
+          (currentData['usernameWindowStart'] as Timestamp?)?.toDate();
+
+      if (isUsernameChange) {
+        final now = DateTime.now();
+        final windowExpired = windowStart == null ||
+            now.difference(windowStart).inDays >= UsernameChangePolicy.windowDays;
+        if (windowExpired) {
+          usedChanges = 0;
+          windowStart = now;
+        }
+
+        if (usedChanges >= UsernameChangePolicy.maxChanges) {
+          final unlock = UsernameChangePolicy.windowEnd(windowStart);
+          throw ProfileException(
+            'Kullanıcı adını ${UsernameChangePolicy.maxChanges} kez değiştirdin. '
+            'Yeni hak ${UsernameChangePolicy.waitText(unlock)} açılır.',
+          );
+        }
+        usedChanges += 1;
+      }
 
       final claim = await transaction.get(usernameRef);
       if (claim.exists) {
@@ -150,17 +192,28 @@ class UserRepository {
         'createdAt': FieldValue.serverTimestamp(),
       }, SetOptions(merge: true));
 
-      transaction.set(userRef, {
+      final profileData = <String, dynamic>{
         'displayName': trimmedName,
         'displayNameLower': trimmedName.toLowerCase(),
         'username': normalizedUsername,
         'usernameLower': normalizedUsername,
         'bio': bio.trim(),
-        'photoUrl': photoUrl.trim(),
+        'photoUrl': trimmedPhoto,
         'avatarEmoji': avatarEmoji.trim(),
         'avatarColor': avatarColor,
         'lastSeenAt': FieldValue.serverTimestamp(),
-      }, SetOptions(merge: true));
+      };
+
+      // Kota alanları yalnızca gerçek bir değişiklikte yazılır; böylece adı
+      // aynı bırakan kayıtlar sayacı/penceresi bozmaz.
+      if (isUsernameChange) {
+        profileData['usernameChanges'] = usedChanges;
+        if (windowStart != null) {
+          profileData['usernameWindowStart'] = Timestamp.fromDate(windowStart);
+        }
+      }
+
+      transaction.set(userRef, profileData, SetOptions(merge: true));
     });
 
     final user = _auth.currentUser;

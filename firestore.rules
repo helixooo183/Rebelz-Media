@@ -35,6 +35,23 @@ service cloud.firestore {
         && value.matches('^[a-z0-9_]{3,20}$');
     }
 
+    // Avatar alanı: `https://…` ya da galeriden seçilen base64 data URI.
+    // 400 000 karakter ≈ 390 KB üst sınır (tipik değer 10-25 KB).
+    function isPhoto(value) {
+      return value is string && value.size() <= 400000;
+    }
+
+    // Kullanıcı adı kotası: alan varsa int olmalı ve en fazla 1 artabilir.
+    function kotaGecerli() {
+      return (!('usernameChanges' in request.resource.data)
+              || (request.resource.data.usernameChanges is int
+                  && request.resource.data.usernameChanges >= 0))
+        && (!('usernameChanges' in request.resource.data)
+              || !('usernameChanges' in resource.data)
+              || request.resource.data.usernameChanges
+                   <= resource.data.usernameChanges + 1);
+    }
+
     // ---------------------------------------------------------------- users
     match /users/{userId} {
       allow get: if signedIn();
@@ -45,9 +62,12 @@ service cloud.firestore {
              'displayName', 'displayNameLower', 'email', 'emailVerified',
              'photoUrl', 'createdAt', 'lastSeenAt',
              'username', 'usernameLower', 'bio', 'avatarEmoji', 'avatarColor',
+             'usernameChanges', 'usernameWindowStart',
              'termsVersion', 'termsAcceptedAt',
            ])
-        && isNonEmptyString(request.resource.data.displayName, 80);
+        && isNonEmptyString(request.resource.data.displayName, 80)
+        && (!('photoUrl' in request.resource.data)
+              || isPhoto(request.resource.data.photoUrl));
 
       // Sahibi profil alanlarını günceller; e-posta/uid gibi alanlar sabit.
       allow update: if isOwner(userId)
@@ -55,10 +75,14 @@ service cloud.firestore {
              .hasOnly([
                'displayName', 'displayNameLower', 'photoUrl', 'lastSeenAt',
                'username', 'usernameLower', 'bio', 'avatarEmoji',
-               'avatarColor', 'termsVersion', 'termsAcceptedAt',
+               'avatarColor', 'usernameChanges', 'usernameWindowStart',
+               'termsVersion', 'termsAcceptedAt',
                'emailVerified',
              ])
         && isNonEmptyString(request.resource.data.displayName, 80)
+        && kotaGecerli()
+        && (!('photoUrl' in request.resource.data)
+              || isPhoto(request.resource.data.photoUrl))
         && (!('usernameLower' in request.resource.data.diff(resource.data)
                 .affectedKeys())
             || isUsername(request.resource.data.usernameLower));

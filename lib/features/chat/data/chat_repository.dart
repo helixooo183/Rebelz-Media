@@ -213,6 +213,12 @@ class ChatRepository {
       // Profil okunamazsa Auth fotoğrafıyla devam.
     }
 
+    // Galeriden seçilen avatar `data:image/…;base64,…` olarak saklanır.
+    // Aynı blob'u **her mesaja** kopyalamak dokümanları şişirir; mesaj
+    // satırlarında avatar zaten ad/baş harften çizildiği için burada
+    // gönderilmez (oda ve profil kayıtları avatary taşımaya devam eder).
+    if (senderPhotoUrl.startsWith('data:')) senderPhotoUrl = '';
+
     final preview = switch (type) {
       MessageType.image => '📷 Fotoğraf',
       MessageType.audio => '🎙 Sesli mesaj',

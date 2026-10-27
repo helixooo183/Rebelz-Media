@@ -1,3 +1,6 @@
+import 'dart:convert';
+import 'dart:typed_data';
+
 import 'package:flutter/material.dart';
 
 import '../theme/app_colors.dart';
@@ -69,7 +72,21 @@ class UserAvatar extends StatelessWidget {
 
   bool get _hasPhoto => (photoUrl ?? '').trim().isNotEmpty;
 
+  /// Galeriden seçilen fotoğraflar `data:image/…;base64,…` biçiminde saklanır.
+  bool get _isDataUri => (photoUrl ?? '').trim().startsWith('data:image/');
+
   bool get _hasEmoji => !_hasPhoto && (emoji ?? '').trim().isNotEmpty;
+
+  /// `data:` URI'sini çözer; bozuksa `null` (baş harfe düşülür).
+  static Uint8List? _decodeDataUri(String uri) {
+    final comma = uri.indexOf(',');
+    if (comma < 0 || comma + 1 >= uri.length) return null;
+    try {
+      return base64Decode(uri.substring(comma + 1));
+    } catch (_) {
+      return null;
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -80,25 +97,7 @@ class UserAvatar extends StatelessWidget {
       child: SizedBox(
         height: size,
         width: size,
-        child: _hasPhoto
-            ? Image.network(
-                photoUrl!.trim(),
-                fit: BoxFit.cover,
-                errorBuilder: (_, _, _) => _fallback(context, radius),
-                loadingBuilder: (context, child, progress) {
-                  if (progress == null) return child;
-                  return Container(
-                    color: context.cardHigh,
-                    alignment: Alignment.center,
-                    child: SizedBox(
-                      height: size * 0.3,
-                      width: size * 0.3,
-                      child: const CircularProgressIndicator(strokeWidth: 2),
-                    ),
-                  );
-                },
-              )
-            : _fallback(context, radius),
+        child: _hasPhoto ? _photo(context, radius) : _fallback(context, radius),
       ),
     );
 
@@ -160,6 +159,40 @@ class UserAvatar extends StatelessWidget {
             ),
         ],
       ),
+    );
+  }
+
+  /// Fotoğraf: base64 (galeri) ise `Image.memory`, değilse `Image.network`.
+  Widget _photo(BuildContext context, double radius) {
+    final source = photoUrl!.trim();
+
+    if (_isDataUri) {
+      final bytes = _decodeDataUri(source);
+      if (bytes == null) return _fallback(context, radius);
+      return Image.memory(
+        bytes,
+        fit: BoxFit.cover,
+        gaplessPlayback: true,
+        errorBuilder: (_, _, _) => _fallback(context, radius),
+      );
+    }
+
+    return Image.network(
+      source,
+      fit: BoxFit.cover,
+      errorBuilder: (_, _, _) => _fallback(context, radius),
+      loadingBuilder: (context, child, progress) {
+        if (progress == null) return child;
+        return Container(
+          color: context.cardHigh,
+          alignment: Alignment.center,
+          child: SizedBox(
+            height: size * 0.3,
+            width: size * 0.3,
+            child: const CircularProgressIndicator(strokeWidth: 2),
+          ),
+        );
+      },
     );
   }
 

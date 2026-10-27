@@ -7,9 +7,12 @@ name: Release (APK)
 #   https://github.com/<owner>/<repo>/releases/latest/download/rebelz-media-<sürüm>.apk
 #
 # Tetikleyiciler:
-#   • main / arena dallarında `pubspec.yaml` sürümü değiştiğinde,
+#   • `main` / `master` dalında `pubspec.yaml` sürümü değiştiğinde,
 #   • bu workflow dosyası değiştiğinde,
 #   • Actions sekmesinden elle ("Run workflow").
+#
+# Yalnızca ana dal tetikler: özellik dallarındaki sürüm denemeleri
+# release üretmez (önce PR birleşir, sonra yayın çıkar).
 #
 # Aynı sürüm için ikinci kez çalışırsa (release zaten varsa) derleme
 # atlanır; böylece gereksiz 7 dakikalık iş yapılmaz.
@@ -19,7 +22,7 @@ run-name: "Release · ${{ github.ref_name }} · ${{ github.sha }}"
 on:
   workflow_dispatch:
   push:
-    branches: [main, master, 'arena/**']
+    branches: [main, master]
     paths:
       - 'pubspec.yaml'
       - '.github/workflows/release.yml'

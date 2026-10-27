@@ -107,8 +107,9 @@ firebase deploy --only firestore:rules   # firestore.rules
 
 Konsoldan da yapılabilir: *Firestore Database → Rules →* içeriği yapıştır →
 **Publish**. Yeni alanlar (`username`, `usernameLower`, `bio`, `avatarEmoji`,
-`avatarColor`, `termsVersion`, `termsAcceptedAt`, `emailVerified`,
-`displayNameLower`), yeni koleksiyonlar (`usernames`, `consents`, `blocked`) ve
+`avatarColor`, `usernameChanges`, `usernameWindowStart`, `termsVersion`,
+`termsAcceptedAt`, `emailVerified`, `displayNameLower`), yeni koleksiyonlar
+(`usernames`, `consents`, `blocked`) ve
 mesajlarda `senderPhotoUrl` alanı **yalnızca güncel kurallarla** çalışır.
 
 ## 6. Mevcut kullanıcılar

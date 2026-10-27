@@ -61,8 +61,8 @@ flutter test           # 6 test
 
 **0) En kolay: hazır APK'yı indir**
 
-`.github/workflows/release.yml`, `pubspec.yaml` sürümü değiştiğinde imzalı
-release APK'sını **GitHub Release** olarak yayınlar — giriş gerekmez, süresi
+`.github/workflows/release.yml`, `main` dalında `pubspec.yaml` sürümü
+değiştiğinde imzalı release APK'sını **GitHub Release** olarak yayınlar — giriş gerekmez, süresi
 dolmaz:
 
 - Son sürümler: <https://github.com/helixooo183/Rebelz-Media/releases/latest>
@@ -269,8 +269,10 @@ Windows: `%USERPROFILE%\.android\debug.keystore`. Keystore yoksa bir kez
 ```
 users/{uid}
   displayName, displayNameLower, username, usernameLower, bio,
-  photoUrl, avatarEmoji, avatarColor, email, emailVerified,
-  termsVersion, termsAcceptedAt, createdAt, lastSeenAt
+  photoUrl                       ← https URL ya da data:image/…;base64 (galeri)
+  avatarEmoji, avatarColor       ← eski kayıtlar için (artık düzenlenmez)
+  usernameChanges, usernameWindowStart   ← 30 günde 2 değişiklik kotası
+  email, emailVerified, termsVersion, termsAcceptedAt, createdAt, lastSeenAt
   ├─ consents/{id}    uid, email, version, accepted, platform, acceptedAt
   └─ blocked/{uid}    blockedUid, createdAt
 
@@ -330,7 +332,10 @@ flutter test test_preview/preview_test.dart --update-goldens   # docs/screens.pn
 - [x] Release imzalamayı `build.gradle.kts`'e bağlama (`key.properties` / `KEYSTORE_*`)
 - [ ] Secret'ları GitHub'a tanımlama + Play Store'a yükleme (`.aab`, Play App Signing)
 - [ ] iOS uygulamasını kaydetme (`GoogleService-Info.plist`, `REVERSED_CLIENT_ID`)
-- [x] `users` koleksiyonundan fotoğraf gösterimi (avatar `photoUrl` destekler)
+- [x] **Galeriden profil fotoğrafı** (`image_picker` → 320 px, base64) ve
+      `users.photoUrl` üzerinden avatar gösterimi
+- [x] **Kullanıcı adı kotası**: 30 günde 2 değişiklik, sonra dönem sonuna
+      kadar kilit (`usernameChanges`, `usernameWindowStart`)
 - [x] Okundu bilgisi (✓✓) ve "yazıyor…" göstergesi
 - [x] Galeriden/kameradan fotoğraf gönderme (`image_picker`, base64)
 - [x] Sesli mesaj (`record` + `audioplayers`)
