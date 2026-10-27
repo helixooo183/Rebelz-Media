@@ -49,6 +49,7 @@ class _ChatScreenState extends State<ChatScreen> {
   UserRepository? _users;
   bool _iBlockedPeer = false;
   bool _isBusy = false;
+  bool _isSending = false;
 
   /// Karşı tarafın uid'si (yalnızca doğrudan sohbetlerde).
   String? _peerUid;

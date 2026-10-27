@@ -50,7 +50,7 @@ class ChatRepository {
             (data['hiddenFor'] as List<dynamic>? ?? const <dynamic>[])
                 .whereType<String>();
         if (hiddenFor.contains(uid)) continue;
-        rooms.add(ChatRoom.fromDoc(doc));
+        rooms.add(ChatRoom.fromDoc(doc, viewerUid: uid));
       }
       rooms.sort((a, b) {
         final aTime = a.lastMessageAt ?? a.createdAt ?? DateTime(1970);
@@ -65,7 +65,7 @@ class ChatRepository {
   Stream<ChatRoom?> watchRoom(String roomId) {
     return _rooms.doc(roomId).snapshots().map((doc) {
       if (!doc.exists) return null;
-      return ChatRoom.fromDoc(doc);
+      return ChatRoom.fromDoc(doc, viewerUid: _myUid);
     });
   }
 
@@ -129,6 +129,7 @@ class ChatRepository {
         'lastMessage': '',
         'lastMessageAt': FieldValue.serverTimestamp(),
         'memberNames': {uid: myName, peerUid: peerName.trim()},
+        'memberPhotos': {uid: '', peerUid: peerPhotoUrl.trim()},
       });
       return roomId;
     }
@@ -141,6 +142,7 @@ class ChatRepository {
       'hiddenFor': FieldValue.arrayRemove([uid]),
       'memberNames.$uid': myName,
       'memberNames.$peerUid': peerName.trim(),
+      'memberPhotos.$peerUid': peerPhotoUrl.trim(),
     }, SetOptions(merge: true));
 
     return roomId;
@@ -181,7 +183,7 @@ class ChatRepository {
         : user.displayName!.trim();
 
     // Gönderenin güncel fotoğrafı (avatar için kopya).
-    var senderPhotoUrl = user.photoUrl ?? '';
+    var senderPhotoUrl = user.photoURL ?? '';
     try {
       final profile = await _db.collection('users').doc(uid).get();
       final stored = (profile.data()?['photoUrl'] as String?)?.trim() ?? '';

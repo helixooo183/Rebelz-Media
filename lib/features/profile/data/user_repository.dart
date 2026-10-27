@@ -38,7 +38,7 @@ class UserRepository {
   /// Oturum açan kullanıcının profili.
   Stream<UserProfile?> watchMyProfile() {
     final uid = _myUid;
-    if (uid == null) return Stream<UserProfile?>.value();
+    if (uid == null) return const Stream<UserProfile?>.empty();
     return watchProfile(uid);
   }
 

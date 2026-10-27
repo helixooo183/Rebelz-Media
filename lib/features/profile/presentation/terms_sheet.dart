@@ -29,14 +29,14 @@ class TermsScreen extends StatelessWidget {
       body: ListView(
         padding: const EdgeInsets.fromLTRB(20, 8, 20, 40),
         children: [
-          Text(
+          const Text(
             'Sürüm ${LegalTexts.version}',
-            style: const TextStyle(fontSize: 12, color: AppColors.textMuted),
+            style: TextStyle(fontSize: 12, color: AppColors.textMuted),
           ),
           const SizedBox(height: 12),
-          Text(
+          const Text(
             LegalTexts.intro,
-            style: const TextStyle(
+            style: TextStyle(
               fontSize: 14,
               height: 1.5,
               color: AppColors.textSecondary,

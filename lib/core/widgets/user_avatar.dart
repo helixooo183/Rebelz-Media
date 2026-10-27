@@ -104,14 +104,14 @@ class UserAvatar extends StatelessWidget {
         width: size,
         fit: BoxFit.cover,
         // Özel fotoğraf varsa da hata durumunda renkli baş harfe dön.
-        errorBuilder: (_, __, ___) => fallback,
+        errorBuilder: (_, _, _) => fallback,
         loadingBuilder: (context, child, progress) {
           if (progress == null) return child;
           return Container(
             height: size,
             width: size,
             alignment: Alignment.center,
-            decoration: BoxDecoration(
+            decoration: const BoxDecoration(
               shape: BoxShape.circle,
               color: AppColors.surfaceHigh,
             ),

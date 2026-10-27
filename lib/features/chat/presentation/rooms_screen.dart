@@ -67,8 +67,9 @@ class _RoomsScreenState extends State<RoomsScreen> {
   @override
   void initState() {
     super.initState();
-    if (_users != null && _myUid != null) {
-      _profileStream = _users!.watchMyProfile();
+    final users = _users;
+    if (users != null && _myUid != null) {
+      _profileStream = users.watchMyProfile();
     }
   }
 
