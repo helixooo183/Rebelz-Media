@@ -30,6 +30,8 @@ jobs:
       # anahtarlar/upload-keystore.p12 ile ayni olmali (secret doğrulama)
       EXPECTED_KEYSTORE_BYTES: '4384'
       EXPECTED_KEYSTORE_SHA256: '0937d02a12134a77afe4cbf2e63b37cc6ee5bc2d5ae3c9aaef7842bfd4796bef'
+      # KEYSTORE_PASS karakter sayisi (deger sizdirilmaz, yalnizca uzunluk raporlanir)
+      EXPECTED_KEYSTORE_PASS_LEN: '28'
 
     steps:
       - uses: actions/checkout@v4
@@ -106,6 +108,11 @@ jobs:
           SHA=$(sha256sum android/app/upload-keystore.p12 | cut -d' ' -f1)
           echo "p12 boyutu: $SIZE bayt · base64 uzunluğu: ${#B64} karakter · sha256: $SHA"
           echo "::notice::Keystore çözüldü: $SIZE bayt, base64 ${#B64} karakter, sha256 ${SHA:0:16}…"
+          echo "::notice::Secret uzunlukları — KEYSTORE_PASS: ${#PASS} (beklenen ${EXPECTED_KEYSTORE_PASS_LEN:-28}) · KEY_ALIAS: ${#ALIAS} (beklenen 6)"
+          if [ -n "${EXPECTED_KEYSTORE_PASS_LEN:-}" ] && [ "${#PASS}" != "$EXPECTED_KEYSTORE_PASS_LEN" ]; then
+            echo "::error::KEYSTORE_PASS uzunluğu ${#PASS}, beklenen ${EXPECTED_KEYSTORE_PASS_LEN} — eksik/fazla karakter yapıştırılmış."
+            exit 1
+          fi
 
           if [ "$SIZE" != "${EXPECTED_KEYSTORE_BYTES:-4384}" ]; then
             echo "::error::Anahtar boyutu beklenen ${EXPECTED_KEYSTORE_BYTES:-4384} bayt değil ($SIZE) — KEYSTORE_B64 eksik/fazla kopyalanmış."
