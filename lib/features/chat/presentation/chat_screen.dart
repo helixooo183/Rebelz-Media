@@ -644,7 +644,7 @@ class _ChatScreenState extends State<ChatScreen> {
           : 'kanal · ${room.subscriberCount} abone';
     }
     if (room.isGroup) return 'grup · ${room.memberIds.length} üye';
-    return 'son görülme bilgisi gizli';
+    return 'kişisel sohbet';
   }
 }
 

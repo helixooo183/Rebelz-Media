@@ -69,7 +69,7 @@ def main() -> None:
         sutun = i % SUTUN
         satir_no = i // SUTUN
         x = BOSLUK + sutun * (GENISLIK + BOSLUK)
-        y = BOSLUK + satir_no * (yukseklik + etiket_yukseklik + BOSLUK)
+        y = BOSLUK + satir_no * (yukseklik + etiket_yuksekligi + BOSLUK)
 
         resim = Image.open(dosya).convert("RGB")
         resim = resim.resize((GENISLIK, yukseklik), Image.LANCZOS)

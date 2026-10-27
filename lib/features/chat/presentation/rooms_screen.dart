@@ -526,6 +526,7 @@ class _RoomTile extends StatelessWidget {
             size: 50,
             photoUrl: photo,
             isGroup: room.isGroup,
+            colorIndex: _colorIndexFor(name),
           ),
           const SizedBox(width: 13),
           Expanded(
@@ -609,6 +610,15 @@ class _RoomTile extends StatelessWidget {
     );
   }
 
+  int _colorIndexFor(String name) {
+    if (name.trim().isEmpty) return 0;
+    var hash = 0;
+    for (final rune in name.trim().runes) {
+      hash = (hash * 31 + rune) & 0x7fffffff;
+    }
+    return hash % AvatarPalette.gradients.length;
+  }
+
   String _formatTime(DateTime? date) {
     if (date == null) return '';
     final now = DateTime.now();
@@ -616,7 +626,8 @@ class _RoomTile extends StatelessWidget {
         date.year == now.year && date.month == now.month && date.day == now.day;
     if (isToday) return DateFormat('HH:mm').format(date);
     if (now.difference(date).inDays < 7) {
-      return DateFormat('EEE').format(date);
+      const days = ['Pzt', 'Sal', 'Çar', 'Per', 'Cum', 'Cmt', 'Paz'];
+      return days[date.weekday - 1];
     }
     return DateFormat('dd.MM').format(date);
   }

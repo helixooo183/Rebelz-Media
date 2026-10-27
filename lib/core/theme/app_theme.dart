@@ -107,6 +107,19 @@ abstract final class AppTheme {
       ),
     );
 
+    // Buton/menü metinleri tema tipografisinden türetilir; aksi hâlde
+    // fontFamily düşer ve testlerde kutu, cihazda tutarsız görünüm olur.
+    final buttonText = textTheme.labelLarge?.copyWith(
+      fontSize: 15,
+      fontWeight: FontWeight.w700,
+      letterSpacing: 0,
+    );
+    final smallButtonText = textTheme.labelLarge?.copyWith(
+      fontSize: 14,
+      fontWeight: FontWeight.w600,
+      letterSpacing: 0,
+    );
+
     return base.copyWith(
       textTheme: textTheme,
       appBarTheme: AppBarTheme(
@@ -171,7 +184,10 @@ abstract final class AppTheme {
       snackBarTheme: SnackBarThemeData(
         backgroundColor:
             isDark ? const Color(0xFF25252B) : const Color(0xFF1B1B1F),
-        contentTextStyle: const TextStyle(color: Colors.white, fontSize: 14),
+        contentTextStyle: textTheme.bodyMedium?.copyWith(
+          color: Colors.white,
+          fontSize: 14,
+        ),
         behavior: SnackBarBehavior.floating,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(14),
@@ -185,19 +201,13 @@ abstract final class AppTheme {
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(15),
           ),
-          textStyle: const TextStyle(
-            fontSize: 15,
-            fontWeight: FontWeight.w700,
-          ),
+          textStyle: buttonText,
         ),
       ),
       textButtonTheme: TextButtonThemeData(
         style: TextButton.styleFrom(
           foregroundColor: scheme.primary,
-          textStyle: const TextStyle(
-            fontSize: 14,
-            fontWeight: FontWeight.w600,
-          ),
+          textStyle: smallButtonText,
         ),
       ),
       outlinedButtonTheme: OutlinedButtonThemeData(
@@ -208,10 +218,7 @@ abstract final class AppTheme {
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(14),
           ),
-          textStyle: const TextStyle(
-            fontSize: 14,
-            fontWeight: FontWeight.w600,
-          ),
+          textStyle: smallButtonText,
         ),
       ),
       dialogTheme: DialogThemeData(
@@ -235,7 +242,10 @@ abstract final class AppTheme {
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(16),
         ),
-        textStyle: TextStyle(fontSize: 14, color: scheme.onSurface),
+        textStyle: textTheme.bodyMedium?.copyWith(
+          fontSize: 14,
+          color: scheme.onSurface,
+        ),
       ),
       checkboxTheme: CheckboxThemeData(
         shape: RoundedRectangleBorder(
