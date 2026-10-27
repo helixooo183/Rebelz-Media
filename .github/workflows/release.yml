@@ -1,0 +1,244 @@
+name: Release (APK)
+
+# Bu workflow, imzalı release APK'sını üretip doğrudan bir GitHub Release'e
+# ekler. Böylece APK'ya giriş yapmadan, süresi dolmayan bir link ile
+# ulaşılabilir:
+#
+#   https://github.com/<owner>/<repo>/releases/latest/download/rebelz-media-<sürüm>.apk
+#
+# Tetikleyiciler:
+#   • main / arena dallarında `pubspec.yaml` sürümü değiştiğinde,
+#   • bu workflow dosyası değiştiğinde,
+#   • Actions sekmesinden elle ("Run workflow").
+#
+# Aynı sürüm için ikinci kez çalışırsa (release zaten varsa) derleme
+# atlanır; böylece gereksiz 7 dakikalık iş yapılmaz.
+
+run-name: "Release · ${{ github.ref_name }} · ${{ github.sha }}"
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main, master, 'arena/**']
+    paths:
+      - 'pubspec.yaml'
+      - '.github/workflows/release.yml'
+
+# Release oluşturmak ve tag yazmak için yazma izni.
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  hazirlik:
+    name: Sürüm bilgisi
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      tag: ${{ steps.ver.outputs.tag }}
+      surum: ${{ steps.ver.outputs.surum }}
+      var: ${{ steps.kontrol.outputs.exists }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: pubspec.yaml sürümünü oku
+        id: ver
+        run: |
+          # version: 0.4.0+6  →  surum=0.4.0+6, tag=v0.4.0-6
+          # Tag'de '+' kullanılmıyor: indirme URL'inde %2B olarak kodlanması
+          # gerekirdi; '-' ile aynı bilgi okunur kalıyor.
+          RAW=$(grep -E '^version:' pubspec.yaml | head -1 | sed -E 's/^version:[[:space:]]*//')
+          RAW=$(printf '%s' "$RAW" | tr -d '[:space:]')
+          NAME=${RAW%%+*}
+          BUILD=${RAW##*+}
+          [ "$BUILD" = "$RAW" ] && BUILD=0
+          echo "surum=$RAW" >> "$GITHUB_OUTPUT"
+          echo "tag=v$NAME-$BUILD" >> "$GITHUB_OUTPUT"
+          echo "::notice::Sürüm $RAW · Release etiketi v$NAME-$BUILD"
+
+      - name: Bu sürüm için release var mı?
+        id: kontrol
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TAG="${{ steps.ver.outputs.tag }}"
+          if gh release view "$TAG" > /dev/null 2>&1; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+            echo "::notice::$TAG zaten yayında — derleme atlanacak."
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          fi
+
+  apk-yayinla:
+    name: Release APK + GitHub Release
+    needs: hazirlik
+    if: needs.hazirlik.outputs.var == 'false'
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      EXPECTED_UPLOAD_SHA1: '2E:96:3D:A6:63:06:D1:8F:34:A8:E5:1A:BD:7C:24:F1:41:B8:6E:8D'
+      EXPECTED_KEYSTORE_BYTES: '4384'
+      EXPECTED_KEYSTORE_SHA256: '0937d02a12134a77afe4cbf2e63b37cc6ee5bc2d5ae3c9aaef7842bfd4796bef'
+      EXPECTED_KEYSTORE_PASS_LEN: '28'
+      TAG: ${{ needs.hazirlik.outputs.tag }}
+      SURUM: ${{ needs.hazirlik.outputs.surum }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Flutter 3.35.1
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.35.1'
+          channel: stable
+          cache: true
+
+      - name: Gradle önbelleği
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: gradle-${{ runner.os }}-${{ hashFiles('android/gradle/wrapper/gradle-wrapper.properties', 'android/**/*.gradle.kts', 'pubspec.lock') }}
+          restore-keys: |
+            gradle-${{ runner.os }}-
+
+      - name: Bağımlılıklar
+        run: flutter pub get
+
+      - name: Analiz + testler
+        run: |
+          set -o pipefail
+          flutter analyze
+          flutter test
+
+      - name: Release imza anahtarını aç (secret varsa)
+        env:
+          KEYSTORE_B64: ${{ secrets.KEYSTORE_B64 }}
+          KEYSTORE_PASS: ${{ secrets.KEYSTORE_PASS }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+        run: |
+          set -o pipefail
+          if [ -z "$KEYSTORE_B64" ]; then
+            echo "::notice::KEYSTORE_B64 tanımlı değil — APK debug keystore ile imzalanacak."
+            exit 0
+          fi
+          B64=$(printf '%s' "$KEYSTORE_B64" | tr -d '[:space:]')
+          PASS=$(printf '%s' "$KEYSTORE_PASS" | tr -d '[:space:]')
+          ALIAS=$(printf '%s' "${KEY_ALIAS:-upload}" | tr -d '[:space:]')
+
+          printf '%s' "$B64" | base64 -d > android/app/upload-keystore.p12
+          SIZE=$(stat -c%s android/app/upload-keystore.p12)
+          SHA=$(sha256sum android/app/upload-keystore.p12 | cut -d' ' -f1)
+          [ "$SIZE" = "$EXPECTED_KEYSTORE_BYTES" ] || { echo "::error::Keystore boyutu beklenen $EXPECTED_KEYSTORE_BYTES değil ($SIZE)."; exit 1; }
+          [ "$SHA" = "$EXPECTED_KEYSTORE_SHA256" ] || { echo "::error::Keystore sha256 beklenen değerle uyuşmuyor."; exit 1; }
+          [ "${#PASS}" = "$EXPECTED_KEYSTORE_PASS_LEN" ] || { echo "::error::KEYSTORE_PASS uzunluğu ${#PASS}, beklenen $EXPECTED_KEYSTORE_PASS_LEN."; exit 1; }
+
+          # PKCS#12: tek parola hem store hem private key için geçerli.
+          {
+            echo "storeFile=upload-keystore.p12"
+            echo "storePassword=$PASS"
+            echo "keyAlias=$ALIAS"
+            echo "keyPassword=$PASS"
+          } > android/key.properties
+
+          if ! KT=$(keytool -J-Duser.language=en -list -v \
+              -keystore android/app/upload-keystore.p12 -storetype PKCS12 \
+              -alias "$ALIAS" -storepass "$PASS" 2>&1); then
+            echo "$KT" | tail -6
+            echo "::error::Upload anahtarı açılamadı — KEYSTORE_PASS / KEY_ALIAS secret'larını kontrol edin."
+            exit 1
+          fi
+          echo "::notice::Upload anahtarı doğrulandı (alias: $ALIAS, keystore $SIZE bayt)."
+
+      - name: Release APK
+        run: |
+          set -o pipefail
+          if flutter build apk --release --no-pub 2>&1 | tee /tmp/release-apk.log; then
+            exit 0
+          fi
+          sed -n '/What went wrong/,/^\* Try:/p' /tmp/release-apk.log | head -12 \
+            | while IFS= read -r line; do
+                [ -n "$line" ] && echo "::error title=Gradle::${line}"
+              done
+          exit 1
+
+      - name: İmzayı doğrula
+        run: |
+          APK=build/app/outputs/flutter-apk/app-release.apk
+          apksigner=$(find "$ANDROID_SDK_ROOT/build-tools" -name apksigner -type f | sort -V | tail -1)
+          OUT=$("$apksigner" verify --print-certs "$APK")
+          echo "$OUT"
+          if ! echo "$OUT" | grep -q "2e963da66306d18f34a8e51abd7c24f141b86e8d"; then
+            echo "::error::APK beklenen upload anahtarıyla imzalanmamış (V2 SHA-1 uyuşmuyor)."
+            exit 1
+          fi
+          echo "::notice::V2 imza SHA-1 doğrulandı: 2e963da66306d18f34a8e51abd7c24f141b86e8d"
+
+      - name: APK'yı sürüm adıyla hazırla + sha256
+        run: |
+          SRC=build/app/outputs/flutter-apk/app-release.apk
+          NAME="rebelz-media-${TAG}"
+          cp "$SRC" "/tmp/${NAME}.apk"
+          (cd /tmp && sha256sum "${NAME}.apk" > "${NAME}.apk.sha256")
+          ls -l "/tmp/${NAME}.apk"
+          cat "/tmp/${NAME}.apk.sha256"
+          echo "APK_ADI=${NAME}" >> "$GITHUB_ENV"
+
+      - name: Release notlarını yaz
+        run: |
+          SIZE=$(stat -c%s "/tmp/${APK_ADI}.apk")
+          SHA=$(cut -d' ' -f1 "/tmp/${APK_ADI}.apk.sha256")
+          cat > /tmp/notes.md <<EOF
+          ## Rebelz Media ${SURUM}
+
+          Android release APK'sı. Bu sürüm, depodaki marka yenilemesini içerir:
+          fırça logo, koyu giriş/kayıt ekranları (#0A0A0A), grunge kırmızı buton
+          ve gerçek Google logosu.
+
+          | | |
+          |---|---|
+          | Sürüm | \`${SURUM}\` |
+          | Dosya | \`${APK_ADI}.apk\` |
+          | Boyut | ${SIZE} bayt |
+          | sha256 | \`${SHA}\` |
+          | İmza | V2 SHA-1 \`2e963da66306d18f34a8e51abd7c24f141b86e8d\` |
+
+          ### Kurulum
+          1. Aşağıdan \`${APK_ADI}.apk\` dosyasını indirin.
+          2. Telefonda "Bilinmeyen kaynaklara izin ver" seçeneğini açın.
+          3. APK'yı kurun.
+
+          Doğrulama: \`sha256sum ${APK_ADI}.apk\` çıktısı yukarıdaki değerle aynı olmalı.
+          EOF
+          cat /tmp/notes.md
+
+      - name: GitHub Release oluştur
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$TAG" \
+            "/tmp/${APK_ADI}.apk#${APK_ADI}.apk" \
+            "/tmp/${APK_ADI}.apk.sha256#${APK_ADI}.apk.sha256" \
+            --title "Rebelz Media ${SURUM}" \
+            --notes-file /tmp/notes.md \
+            --target main \
+            --latest
+          echo "::notice::Release yayında: $(gh release view "$TAG" --json url --jq .url)"
+
+      - name: Özet
+        run: |
+          {
+            echo "### ✅ Release yayında: \`$TAG\`"
+            echo ""
+            echo "- https://github.com/${GITHUB_REPOSITORY}/releases/tag/${TAG}"
+            echo "- https://github.com/${GITHUB_REPOSITORY}/releases/latest/download/${APK_ADI}.apk"
+          } >> "$GITHUB_STEP_SUMMARY"
