@@ -104,6 +104,19 @@ class _RegisterScreenState extends State<RegisterScreen> {
     return AuthScaffold(
       title: 'Hesap oluştur',
       subtitle: 'Saniyeler içinde katıl; kullanıcı adını seç, çevreni kur.',
+      footer: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Text(
+            'Zaten hesabın var mı?',
+            style: TextStyle(color: context.muted, fontSize: 14),
+          ),
+          TextButton(
+            onPressed: isBusy ? null : () => context.go(AppRoutes.login),
+            child: const Text('Giriş yap'),
+          ),
+        ],
+      ),
       children: [
         GoogleSignInButton(
           onPressed: _acceptedTerms ? _googleSignIn : null,
@@ -194,19 +207,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
           ),
         ),
       ],
-      footer: Row(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Text(
-            'Zaten hesabın var mı?',
-            style: TextStyle(color: context.muted, fontSize: 14),
-          ),
-          TextButton(
-            onPressed: isBusy ? null : () => context.go(AppRoutes.login),
-            child: const Text('Giriş yap'),
-          ),
-        ],
-      ),
     );
   }
 }

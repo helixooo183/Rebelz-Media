@@ -141,6 +141,21 @@ class _LoginScreenState extends State<LoginScreen> {
     return AuthScaffold(
       title: 'Tekrar hoş geldin',
       subtitle: 'Sohbetlerine, kanallarına ve çevrene kaldığın yerden devam et.',
+      footer: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Text(
+            'Hesabın yok mu?',
+            style: TextStyle(color: context.muted, fontSize: 14),
+          ),
+          TextButton(
+            onPressed: (_isLoading || _isGoogleLoading)
+                ? null
+                : () => context.go(AppRoutes.register),
+            child: const Text('Kayıt ol'),
+          ),
+        ],
+      ),
       children: [
         GoogleSignInButton(
           onPressed: _googleSignIn,
@@ -209,21 +224,6 @@ class _LoginScreenState extends State<LoginScreen> {
           ),
         ),
       ],
-      footer: Row(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Text(
-            'Hesabın yok mu?',
-            style: TextStyle(color: context.muted, fontSize: 14),
-          ),
-          TextButton(
-            onPressed: (_isLoading || _isGoogleLoading)
-                ? null
-                : () => context.go(AppRoutes.register),
-            child: const Text('Kayıt ol'),
-          ),
-        ],
-      ),
     );
   }
 }
