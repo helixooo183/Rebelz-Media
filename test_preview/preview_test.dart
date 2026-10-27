@@ -176,6 +176,9 @@ class _FakeChatRepository implements ChatRepository {
   }) async {}
 
   @override
+  Future<void> setRoomPhoto(String roomId, String dataUri) async {}
+
+  @override
   Future<void> setPermission(
     String roomId,
     String key, {
