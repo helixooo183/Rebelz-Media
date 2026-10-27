@@ -779,7 +779,7 @@ void main() {
       name: 'Rebelz Duyuru',
       createdBy: 'u1',
       ownerUid: 'u1',
-      memberIds: const ['u1', 'u2', 'u3'],
+      memberIds: ['u1', 'u2', 'u3'],
       type: 'channel',
       about: 'Ürün güncellemeleri ve yeni özellikler',
       subscriberCount: 128,
