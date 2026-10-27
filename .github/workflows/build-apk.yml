@@ -98,7 +98,16 @@ jobs:
           B64=$(printf '%s' "$KEYSTORE_B64" | tr -d '[:space:]')
           PASS=$(printf '%s' "$KEYSTORE_PASS" | tr -d '[:space:]')
           ALIAS=$(printf '%s' "${KEY_ALIAS:-upload}" | tr -d '[:space:]')
-          KPASS=$(printf '%s' "${KEY_PASS:-$KEYSTORE_PASS}" | tr -d '[:space:]')
+          KPASS=$(printf '%s' "${KEY_PASS:-}" | tr -d '[:space:]')
+
+          # Depodaki anahtar PKCS#12: tek parola hem store hem private key icin
+          # gecerlidir. KEY_PASS farkli/eski bir deger olsa bile KEYSTORE_PASS
+          # kullanilir; aksi halde Gradle "Given final block not properly
+          # padded" ile private key'i acamaz.
+          if [ -n "$KPASS" ] && [ "$KPASS" != "$PASS" ]; then
+            echo "::warning::KEY_PASS, KEYSTORE_PASS ile ayni degil. PKCS#12 tek parola kullanir; KEYSTORE_PASS kullanilacak (KEY_PASS secret'ini ayni degerle guncelleyin)."
+          fi
+          KPASS="$PASS"
 
           if ! printf '%s' "$B64" | base64 -d > android/app/upload-keystore.p12 2>/dev/null; then
             echo "::error::KEYSTORE_B64 base64 olarak çözülemedi — değer eksik/bozuk kopyalanmış."
@@ -148,7 +157,16 @@ jobs:
             exit 1
           fi
           echo "$KT" | grep -E "SHA1:|SHA256:" || true
-          echo "::notice::Upload imza anahtarı doğrulandı (alias: $ALIAS)."
+
+          # keytool yalnizca store parolasini dogrular; private key'in gercekten
+          # acilabildigini de kontrol et (Gradle 'not properly padded' hatasini
+          # 4 dakikalik derleme yerine burada yakala).
+          if ! openssl pkcs12 -in android/app/upload-keystore.p12 \
+              -passin pass:"$PASS" -nocerts -nodes > /dev/null 2>&1; then
+            echo "::error::Private key parola ile açılamadı — KEYSTORE_PASS ile anahtar uyumsuz."
+            exit 1
+          fi
+          echo "::notice::Upload imza anahtarı doğrulandı (alias: $ALIAS, private key ok)."
 
       # Not: log dosyalari herkese acik olmayabilir; Gradle hatasi hem annotation
       # hem de kosu ozetine yazilir ki sebep tek bakista gorunsun.
