@@ -135,4 +135,89 @@ void main() {
 
     expect(value, isTrue);
   });
+
+  group('Kullanıcı adı kotası', () {
+    final simdi = DateTime(2026, 10, 27, 12);
+
+    test('hiç değiştirilmemişse 2 hak vardır', () {
+      expect(
+        UsernameChangePolicy.remaining(used: 0, windowStart: null, now: simdi),
+        UsernameChangePolicy.maxChanges,
+      );
+    });
+
+    test('1 değişiklikte 1 hak kalır', () {
+      expect(
+        UsernameChangePolicy.remaining(
+          used: 1,
+          windowStart: simdi.subtract(const Duration(days: 3)),
+          now: simdi,
+        ),
+        1,
+      );
+    });
+
+    test('2 değişiklikte kilitlenir ve açılma zamanı 30. gündür', () {
+      final baslangic = simdi.subtract(const Duration(days: 10));
+      expect(
+        UsernameChangePolicy.remaining(
+          used: 2,
+          windowStart: baslangic,
+          now: simdi,
+        ),
+        0,
+      );
+      expect(
+        UsernameChangePolicy.unlockAt(
+          used: 2,
+          windowStart: baslangic,
+          now: simdi,
+        ),
+        baslangic.add(const Duration(days: UsernameChangePolicy.windowDays)),
+      );
+    });
+
+    test('dönem dolunca haklar yeniden 2 olur', () {
+      expect(
+        UsernameChangePolicy.remaining(
+          used: 2,
+          windowStart: simdi.subtract(const Duration(days: 31)),
+          now: simdi,
+        ),
+        UsernameChangePolicy.maxChanges,
+      );
+      expect(
+        UsernameChangePolicy.unlockAt(
+          used: 2,
+          windowStart: simdi.subtract(const Duration(days: 31)),
+          now: simdi,
+        ),
+        isNull,
+      );
+    });
+
+    test('kalan süre metni gün cinsinden yazılır', () {
+      expect(
+        UsernameChangePolicy.waitText(simdi.add(const Duration(days: 12))),
+        '12 gün sonra',
+      );
+    });
+
+    test('profil getter\'ları sayacı yansıtır', () {
+      final kilitli = UserProfile(
+        uid: 'u1',
+        displayName: 'Ayşe',
+        username: 'ayse_y',
+        usernameChanges: 2,
+        usernameWindowStart: simdi.subtract(const Duration(days: 5)),
+      );
+      expect(kilitli.kalanKullaniciAdiHakki, 0);
+      expect(kilitli.kullaniciAdiKilitli, isTrue);
+      expect(kilitli.yeniKullaniciAdiHakki, isNotNull);
+
+      final acik = kilitli.copyWith(usernameChanges: 0);
+      expect(acik.kalanKullaniciAdiHakki, UsernameChangePolicy.maxChanges);
+      expect(acik.kullaniciAdiKilitli, isFalse);
+    });
+  });
 }
