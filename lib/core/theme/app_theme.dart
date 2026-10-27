@@ -88,7 +88,7 @@ abstract final class AppTheme {
       ),
       titleMedium: base.textTheme.titleMedium?.copyWith(
         fontSize: 16,
-        fontWeight: FontWeight.w650,
+        fontWeight: FontWeight.w700,
         letterSpacing: -0.2,
         color: scheme.onSurface,
       ),

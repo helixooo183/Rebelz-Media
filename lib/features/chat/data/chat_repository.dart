@@ -128,7 +128,7 @@ class ChatRepository {
 
     if (!exists) {
       await roomRef.set({
-        'name': peerName.trim().isEmpty ? 'Sohbet' : peerName.trim(),
+        'name': 'Doğrudan sohbet',
         'photoUrl': peerPhotoUrl.trim(),
         'type': RoomType.direct,
         'createdBy': uid,
@@ -145,8 +145,6 @@ class ChatRepository {
 
     await roomRef.set({
       'type': RoomType.direct,
-      'photoUrl': peerPhotoUrl.trim(),
-      'name': peerName.trim().isEmpty ? 'Sohbet' : peerName.trim(),
       'hiddenFor': FieldValue.arrayRemove([uid]),
       'memberNames.$uid': myName,
       'memberNames.$peerUid': peerName.trim(),

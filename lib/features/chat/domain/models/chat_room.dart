@@ -140,8 +140,9 @@ class ChatRoom {
     );
   }
 
-  /// [viewerUid] verilirse doğrudan sohbette karşı tarafın adı/fotoğrafı
-  /// kullanılır; böylece her iki taraf da karşısındakini görür.
+  /// [viewerUid] verilirse doğrudan sohbette ad/fotoğraf **karşı tarafın**
+  /// `memberNames` / `memberPhotos` kaydından okunur. Böylece iki taraf da
+  /// birbirini doğru adla görür (oda `name` alanı yalnızca yedektir).
   factory ChatRoom.fromDoc(
     DocumentSnapshot<Map<String, dynamic>> doc, {
     String? viewerUid,
@@ -195,11 +196,13 @@ class ChatRoom {
           break;
         }
       }
-      if (peer != null) {
+      if (peer != null && peer.trim().isNotEmpty) {
         final peerName = (memberNames[peer] ?? '').trim();
         if (peerName.isNotEmpty) name = peerName;
-        photoUrl = (memberPhotos[peer] ?? '').trim();
+        final peerPhoto = (memberPhotos[peer] ?? '').trim();
+        if (peerPhoto.isNotEmpty) photoUrl = peerPhoto;
       }
+      // Kendi adımız da kayıtlıysa listede doğru görünsün diye bırakılır.
     }
 
     return ChatRoom(
