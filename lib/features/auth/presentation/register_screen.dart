@@ -94,7 +94,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
   void _showError(String message) {
     if (!mounted) return;
     ScaffoldMessenger.of(context)
-        .showSnackBar(SnackBar(content: Text(message)));
+      ..hideCurrentSnackBar()
+      ..showSnackBar(SnackBar(content: Text(message)));
   }
 
   @override
@@ -104,15 +105,23 @@ class _RegisterScreenState extends State<RegisterScreen> {
     return AuthScaffold(
       title: 'Hesap oluştur',
       subtitle: 'Saniyeler içinde katıl; kullanıcı adını seç, çevreni kur.',
+      logoHeight: 84,
       footer: Row(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Text(
+          const Text(
             'Zaten hesabın var mı?',
-            style: TextStyle(color: context.muted, fontSize: 14),
+            style: TextStyle(fontSize: 14.5, color: Color(0xFFD5D5DA)),
           ),
           TextButton(
             onPressed: isBusy ? null : () => context.go(AppRoutes.login),
+            style: TextButton.styleFrom(
+              foregroundColor: AppColors.brand,
+              textStyle: const TextStyle(
+                fontSize: 14.5,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
             child: const Text('Giriş yap'),
           ),
         ],
@@ -123,14 +132,14 @@ class _RegisterScreenState extends State<RegisterScreen> {
           label: 'Google ile kayıt ol',
           isLoading: _isGoogleLoading,
         ),
-        const SizedBox(height: 20),
+        const SizedBox(height: 18),
         const OrDivider(label: 'veya e-posta ile'),
-        const SizedBox(height: 20),
+        const SizedBox(height: 18),
         Form(
           key: _formKey,
           child: Column(
             children: [
-              AppTextField(
+              AppTextField.dark(
                 controller: _nameController,
                 hintText: 'Adın Soyadın',
                 labelText: 'Görünen ad',
@@ -147,7 +156,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                 },
               ),
               const SizedBox(height: 16),
-              AppTextField(
+              AppTextField.dark(
                 controller: _emailController,
                 hintText: 'ornek@mail.com',
                 labelText: 'E-posta',
@@ -164,7 +173,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                 },
               ),
               const SizedBox(height: 16),
-              AppTextField(
+              AppTextField.dark(
                 controller: _passwordController,
                 hintText: 'En az 6 karakter',
                 labelText: 'Şifre',
@@ -188,13 +197,13 @@ class _RegisterScreenState extends State<RegisterScreen> {
                 onChanged: (value) => setState(() => _acceptedTerms = value),
               ),
               const SizedBox(height: 12),
-              Text(
+              const Text(
                 'Kayıttan sonra doğrulama bağlantısı e-postana gönderilir. '
                 'Gelmezse spam/gereksiz klasörünü kontrol et.',
                 style: TextStyle(
                   fontSize: 12,
-                  height: 1.4,
-                  color: context.muted,
+                  height: 1.45,
+                  color: Color(0xFF8E8E97),
                 ),
               ),
               const SizedBox(height: 18),
