@@ -49,7 +49,10 @@ android/app/build.gradle.kts release imzasini su sirayla arar:
   2) ortam degiskenleri                (KEYSTORE_PATH / KEYSTORE_PASS / KEY_ALIAS / KEY_PASS)
   3) hicbiri yoksa -> debug keystore   (CI ozetinde "debug anahtari" olarak isaretlenir)
 CI'da secret adlari: KEYSTORE_B64 (base64 .p12), KEYSTORE_PASS, KEY_ALIAS, KEY_PASS.
-Parola/alias yanlissa workflow "Release imza anahtarini ac" adiminda hata verir.
+Depodaki anahtar PKCS#12 oldugu icin TEK parola kullanir: KEY_PASS = KEYSTORE_PASS.
+Workflow bunu zorlar (farkliysa uyari verip KEYSTORE_PASS'i kullanir), ayrica
+keytool ile store parolasini ve openssl ile private key'i derlemeden once dogrular.
+Dogrulanmis CI imzasi: 2e963da66306d18f34a8e51abd7c24f141b86e8d (= 2E:96:3D:A6:...).
 
 4) KONTROL KOMUTLARI
 --------------------
