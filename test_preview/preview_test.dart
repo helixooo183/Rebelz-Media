@@ -26,6 +26,7 @@ import 'package:sohbet/features/chat/domain/models/chat_room.dart';
 import 'package:sohbet/features/chat/presentation/channels_screen.dart';
 import 'package:sohbet/features/chat/presentation/chat_screen.dart';
 import 'package:sohbet/features/chat/presentation/new_chat_sheet.dart';
+import 'package:sohbet/features/chat/presentation/room_settings_screen.dart';
 import 'package:sohbet/features/chat/presentation/rooms_screen.dart';
 import 'package:sohbet/features/profile/data/user_repository.dart';
 import 'package:sohbet/features/profile/domain/user_profile.dart';
@@ -733,6 +734,43 @@ void main() {
     await expectLater(
       find.byType(MaterialApp),
       matchesGoldenFile('goldens/13_chat_blocked.png'),
+    );
+  });
+
+  testWidgets('17 kanal ayarları (moderatörler ve izinler)', (tester) async {
+    final kanal = ChatRoom(
+      id: 'c9',
+      name: 'Rebelz Duyuru',
+      createdBy: 'u1',
+      ownerUid: 'u1',
+      memberIds: const ['u1', 'u2', 'u3'],
+      type: 'channel',
+      about: 'Ürün güncellemeleri ve yeni özellikler',
+      subscriberCount: 128,
+      roles: const {'u2': ChatRoom.roleModerator},
+      memberNames: const {
+        'u1': 'Ayşe Yılmaz',
+        'u2': 'Deniz Kaya',
+        'u3': 'Emre Demir',
+      },
+      permissions: const {ChatRoom.permModsDeleteMessages: true},
+    );
+
+    await tester.pumpWidget(
+      _wrap(
+        RoomSettingsScreen(
+          roomId: 'c9',
+          repository: _FakeChatRepository(rooms: <ChatRoom>[kanal]),
+          userRepository: users,
+          currentUserId: 'u1',
+        ),
+      ),
+    );
+    await tester.pump();
+
+    await expectLater(
+      find.byType(MaterialApp),
+      matchesGoldenFile('goldens/17_room_settings.png'),
     );
   });
 }
