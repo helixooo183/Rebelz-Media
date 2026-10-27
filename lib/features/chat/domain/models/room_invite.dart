@@ -92,9 +92,11 @@ String? inviteCodeFromUri(Uri uri) {
   final raw = uri.toString();
   if (!raw.toLowerCase().contains('katil')) return null;
 
+  // `rebelzmedia://katil/KOD` biçiminde "katil" host'ta kalır, http
+  // bağlantılarında ise yolun ilk parçasıdır — ikisini tek listede tara.
   final segments = <String>[
-    ...uri.pathSegments,
     if (uri.host.isNotEmpty) uri.host,
+    ...uri.pathSegments,
   ];
 
   for (var i = 0; i < segments.length; i++) {
