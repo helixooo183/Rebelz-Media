@@ -280,6 +280,7 @@ usernames/{usernameLower}      uid, usernameLower, createdAt   (tekillik kilidi)
 
 room_invites/{code}            roomId, createdBy, roomName, roomType,
                                createdAt                  (davet bağlantıları)
+admins/{uid}                   role, createdAt            (yönetici listesi)
 reports/{id}                   reporterUid, targetUid, targetName, reason,
                                details, roomId, messageId, messageSnippet,
                                status, createdAt          (şikayetler)
@@ -358,6 +359,8 @@ flutter test test_preview/preview_test.dart --update-goldens   # docs/screens.pn
 - [x] Sohbetlerde sağa/sola kaydırarak kategori değiştirme
 - [x] **Davet bağlantısı** (kanal + grup) ve **özel/halka açık kanal**
 - [x] Kanallar ekranında **arama çubuğu**
+- [x] **Davet derin bağlantısı** (`rebelzmedia://katil/<kod>` → uygulama açılır)
+- [x] **Şikayet inceleme paneli** (`admins/{uid}`, durum güncelleme)
 - [ ] Mesaj sayfalama (şu an son 200 mesaj), FCM bildirimleri
 
 ---

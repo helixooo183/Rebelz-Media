@@ -6,12 +6,20 @@ import '../../features/auth/presentation/register_screen.dart';
 import '../../features/auth/presentation/splash_screen.dart';
 import '../../features/chat/presentation/channels_screen.dart';
 import '../../features/chat/presentation/chat_screen.dart';
+import '../../features/chat/presentation/join_invite_screen.dart';
 import '../../features/chat/presentation/rooms_screen.dart';
+import '../../features/chat/domain/models/room_invite.dart';
 import '../../features/profile/presentation/profile_screen.dart';
 import '../widgets/home_shell.dart';
 import 'auth_notifier.dart';
 
 final AuthNotifier authNotifier = AuthNotifier();
+
+/// Derin bağlantıyla gelen davet kodu.
+///
+/// Kullanıcı giriş yapmamışsa kod burada tutulur; giriş yaptıktan sonra
+/// `/katil/<kod>` ekranına yönlendirilir (kod kaybolmaz).
+final ValueNotifier<String?> pendingInviteCode = ValueNotifier<String?>(null);
 
 /// Rota isimleri/sabitleri tek yerde.
 abstract final class AppRoutes {
@@ -24,6 +32,9 @@ abstract final class AppRoutes {
 
   static String chat(String roomId, {required String name}) =>
       '/chats/$roomId?name=${Uri.encodeComponent(name)}';
+
+  /// Davet ekranı (derin bağlantı: `rebelzmedia://katil/<kod>`).
+  static String joinInvite(String code) => '/katil/$code';
 }
 
 final GoRouter appRouter = GoRouter(
@@ -45,11 +56,17 @@ final GoRouter appRouter = GoRouter(
     final isAuthRoute =
         location == AppRoutes.login || location == AppRoutes.register;
 
+    // Derin bağlantı: rebelzmedia://katil/<kod> → /katil/<kod>
+    final inviteCode = inviteCodeFromUri(state.uri);
+    if (inviteCode != null) pendingInviteCode.value = inviteCode;
+
     if (!authNotifier.isAuthenticated) {
       return isAuthRoute ? null : AppRoutes.login;
     }
 
     if (isAuthRoute || location == AppRoutes.splash) {
+      final pending = pendingInviteCode.value;
+      if (pending != null) return AppRoutes.joinInvite(pending);
       return AppRoutes.chats;
     }
 
@@ -100,6 +117,24 @@ final GoRouter appRouter = GoRouter(
           ],
         ),
       ],
+    ),
+
+    // Davet: derin bağlantı ya da elle girilen kod.
+    GoRoute(
+      path: '/katil/:code',
+      builder: (context, state) {
+        final code = state.pathParameters['code'] ?? '';
+        return JoinInviteScreen(
+          code: code,
+          // Yalnızca bağlantıdan gelindiyse otomatik katılmayı dene;
+          // elle girilen kodda kullanıcı onaylasın.
+          autoJoin: state.uri.queryParameters['auto'] == '1',
+          onJoined: (roomId) {
+            pendingInviteCode.value = null;
+            context.go(AppRoutes.chat(roomId, name: 'Sohbet'));
+          },
+        );
+      },
     ),
 
     // Sohbet ekranı tam ekran açılır.

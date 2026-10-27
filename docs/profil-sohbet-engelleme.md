@@ -116,6 +116,17 @@ Kayıt: `room_invites/{code}` → `roomId`, `createdBy`, `roomName`, `roomType`,
 `createdAt`. Kod, karıştırılabilen karakterler (0/O, 1/I) kullanılmadan
 `A-Z 2-9` alfabesinden üretilir.
 
+### Bağlantıya dokununca uygulama açılır (derin bağlantı)
+`rebelzmedia://katil/<kod>` bağlantısı `AndroidManifest.xml` içindeki
+`intent-filter` ile yakalanır; WhatsApp/e-postada linke dokununca uygulama
+açılır ve **Davet** ekranı gelir.
+
+- Giriş yapılmamışsa kod bellekte tutulur (`pendingInviteCode`), giriş
+  yapıldıktan sonra davet ekranına dönülür — kod kaybolmaz.
+- Ekranda kod gösterilir, "Katıl"a basınca odaya üye olunur ve sohbet açılır.
+- Elle girilen kodda otomatik katılma yapılmaz (`autoJoin` yalnızca
+  bağlantıdan gelen akışta).
+
 ### Özel / herkese açık kanal
 Kanal sahibi ayarlarda **Özel kanal** anahtarını açar:
 - **Herkese açık** (varsayılan): Kanallar sekmesinde listelenir.
@@ -126,13 +137,32 @@ Kanal sahibi ayarlarda **Özel kanal** anahtarını açar:
 Kanallar sekmesinde üstte **arama çubuğu** vardır; kanal adı ve açıklamasında
 aranır. Sonuç yoksa doğrudan "Kod ile katıl" önerilir.
 
-## 6. Kategori değiştirme (kaydırma)
+## 6. Şikayet inceleme paneli (yönetici)
+
+Profil → **Şikayetler (yönetici)** (yalnızca yöneticide görünür).
+
+- Yönetici = `admins/{uid}` dokümanı olan kullanıcı. İstemci bu koleksiyona
+  yazamaz; kayıt Firebase konsolundan/CLI'dan eklenir:
+  ```
+  admins/{uid}: { role: "admin", createdAt: <timestamp> }
+  ```
+- Panelde şikayetler en yeniden eskiye listelenir; filtre: **Açık / Kapanan /
+  Tümü**. Her kartta hedef kişi, sebep, ayrıntı, mesaj şikayetlerinde mesaj
+  özeti, bildiren kişi ve tarih bulunur.
+- İşlemler: **Çözüldü** (`status: resolved`), **Reddet** (`dismissed`),
+  kapananları **Yeniden aç** (`open`). Durum değişikliği `reviewedAt` ve
+  `reviewedBy` alanlarını da yazar.
+- Kurallar: `reports` listesi/okuması yöneticiye açık; güncelleme yalnızca
+  `status`/`reviewedAt`/`reviewedBy` alanlarında ve yalnızca yönetici
+  tarafından yapılabilir.
+
+## 7. Kategori değiştirme (kaydırma)
 
 Sohbetler ekranında listeyi **sola/sağa kaydırarak** kategori değişir
 (Tümü ↔ Kişiler ↔ Gruplar). Alttaki noktalar hangi kategoride olduğunu
 gösterir, dokunarak da geçilebilir.
 
-## 7. Sohbet silme
+## 8. Sohbet silme
 
 Sohbet balonuna **uzun bas** ya da satırdaki **⋮** menüsü:
 
@@ -141,7 +171,7 @@ Sohbet balonuna **uzun bas** ya da satırdaki **⋮** menüsü:
 | **Sadece benden kaldır** | `rooms.hiddenFor`'a uid eklenir. Karşı taraf sohbeti görmeye devam eder. Karşı taraf yeni mesaj yazarsa sohbet ikinizde de geri gelir. |
 | **Sohbeti tamamen sil** | Tüm mesajlar (300'erli partiler) ve oda dokümanı silinir. Doğrudan sohbette iki taraf da silebilir; eski grup sohbetlerinde yalnızca oluşturan. |
 
-## 8. Engelleme
+## 9. Engelleme
 
 - Sohbet ekranı sağ üst menü → **Kişiyi engelle** (onay istenir).
 - Engellenen kişi:
@@ -154,7 +184,7 @@ Sohbet balonuna **uzun bas** ya da satırdaki **⋮** menüsü:
 - Engeli kaldırdıktan sonra sohbeti yeniden açmak için *Yeni sohbet* →
   kullanıcı adını ara.
 
-## 9. Kurulum adımları (tek seferlik)
+## 10. Kurulum adımları (tek seferlik)
 
 1. `firestore.rules` dosyasını yayınlayın:
    `firebase deploy --only firestore:rules` (ya da konsoldan yapıştırıp
@@ -169,7 +199,7 @@ Sohbet balonuna **uzun bas** ya da satırdaki **⋮** menüsü:
    (tipik 10-25 KB, üst sınır 400 000 karakter). Eski `https://` bağlantıları
    da desteklenmeye devam eder.
 
-## 10. Bilinen sınırlar
+## 11. Bilinen sınırlar
 
 - Engelleme, istemci + kural düzeyinde uygulanır; engellenen kişi teknik
   olarak yeni bir hesapla yazabilir. Kalıcı engelleme için Cloud Functions

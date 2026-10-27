@@ -26,7 +26,10 @@ import 'package:sohbet/features/chat/domain/models/chat_room.dart';
 import 'package:sohbet/features/chat/domain/models/room_invite.dart';
 import 'package:sohbet/features/chat/presentation/channels_screen.dart';
 import 'package:sohbet/features/chat/presentation/chat_screen.dart';
+import 'package:sohbet/features/chat/presentation/join_invite_screen.dart';
 import 'package:sohbet/features/chat/presentation/new_chat_sheet.dart';
+import 'package:sohbet/features/moderation/data/moderation_repository.dart';
+import 'package:sohbet/features/moderation/presentation/reports_screen.dart';
 import 'package:sohbet/features/chat/presentation/room_settings_screen.dart';
 import 'package:sohbet/features/chat/presentation/rooms_screen.dart';
 import 'package:sohbet/features/profile/data/user_repository.dart';
@@ -276,6 +279,44 @@ class _FakeUserRepository implements UserRepository {
 
   @override
   Future<List<UserProfile>> fetchBlockedProfiles() async => blockedProfiles;
+}
+
+
+/// Firebase'e dokunmayan sahte şikayet deposu (inceleme paneli).
+class _FakeModerationRepository implements ModerationRepository {
+  _FakeModerationRepository({this.reports = const <ReportItem>[]});
+
+  final List<ReportItem> reports;
+
+  @override
+  Future<bool> isAdmin() async => true;
+
+  @override
+  Stream<List<ReportItem>> watchReports() => Stream.value(reports);
+
+  @override
+  Future<void> updateReportStatus(String reportId, String status) async {}
+
+  @override
+  Stream<List<SupportTicket>> watchMySupportTickets() =>
+      Stream.value(const <SupportTicket>[]);
+
+  @override
+  Future<void> sendReport({
+    required String targetUid,
+    required String reason,
+    String targetName = '',
+    String details = '',
+    String roomId = '',
+    String messageId = '',
+    String messageSnippet = '',
+  }) async {}
+
+  @override
+  Future<void> sendSupportRequest({
+    required String topic,
+    required String message,
+  }) async {}
 }
 
 /// Fontların bulunduğu Flutter SDK kökünü bulur.
@@ -807,6 +848,77 @@ void main() {
     await expectLater(
       find.byType(MaterialApp),
       matchesGoldenFile('goldens/17_room_settings.png'),
+    );
+  });
+
+  testWidgets('18 şikayet inceleme paneli', (tester) async {
+    final now = DateTime.now();
+    final reports = <ReportItem>[
+      ReportItem(
+        id: 'r1',
+        reporterUid: 'u2',
+        reporterName: 'Deniz Kaya',
+        targetUid: 'u3',
+        targetName: 'Emre Demir',
+        reason: 'Spam / reklam',
+        details: 'Sürekli aynı reklam bağlantısını gönderiyor.',
+        status: ReportStatus.open,
+        roomId: 'r1',
+        messageId: 'm1',
+        messageSnippet: 'Kazanmak için tıkla: ornek-kampanya.com',
+        createdAt: now.subtract(const Duration(hours: 2)),
+      ),
+      ReportItem(
+        id: 'r2',
+        reporterUid: 'u3',
+        reporterName: 'Emre Demir',
+        targetUid: 'u2',
+        targetName: 'Deniz Kaya',
+        reason: 'Taciz veya zorbalık',
+        status: ReportStatus.open,
+        createdAt: now.subtract(const Duration(days: 1)),
+      ),
+      ReportItem(
+        id: 'r3',
+        reporterUid: 'u4',
+        reporterName: 'Selin',
+        targetUid: 'u5',
+        targetName: 'Kaan',
+        reason: 'Sahte hesap',
+        status: ReportStatus.resolved,
+        createdAt: now.subtract(const Duration(days: 3)),
+      ),
+    ];
+
+    await tester.pumpWidget(
+      _wrap(
+        ReportsScreen(
+          repository: _FakeModerationRepository(reports: reports),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    await expectLater(
+      find.byType(MaterialApp),
+      matchesGoldenFile('goldens/18_reports.png'),
+    );
+  });
+
+  testWidgets('19 davet ekranı', (tester) async {
+    await tester.pumpWidget(
+      _wrap(
+        JoinInviteScreen(
+          code: 'K7M2P9QD',
+          repository: _FakeChatRepository(rooms: rooms),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    await expectLater(
+      find.byType(MaterialApp),
+      matchesGoldenFile('goldens/19_join_invite.png'),
     );
   });
 }
