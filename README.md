@@ -363,7 +363,7 @@ flutter test test_preview/preview_test.dart --update-goldens   # docs/screens.pn
 - [x] **Şikayet inceleme paneli** (`admins/{uid}`, durum güncelleme)
 - [x] **Kanal/grup fotoğrafı** (galeriden, base64 — sahip/moderatör)
 - [x] **Avatar koruması** (girişte Google fotoğrafı/adı özel seçimi ezmez)
-- [x] **Mesaj silme** (benden sil / herkesten sil) + fotoğrafta tam ekran görüntüleme
+- [x] **Mesaj silme** (benden sil / herkesten sil) + fotoğrafta tam ekran görüntüleme + 5 saniyelik **geri al** bildirimi
 - [ ] Mesaj sayfalama (şu an son 200 mesaj), FCM bildirimleri
 
 ---

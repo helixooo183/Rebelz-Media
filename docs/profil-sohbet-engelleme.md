@@ -207,8 +207,13 @@ Bir mesaja (metin, fotoğraf veya sesli mesaj) **uzun bas** → işlem menüsü:
   kimse bu kaydı okuyamaz.
 - **Herkesten sil** kendi mesajında içeriği temizler ve "Bu mesaj silindi"
   izi bırakır. Kanal/grupta `modsDeleteMessages` izni açıksa **sahip ve
-  moderatörler** başkasının mesajını da silebilir (doküman kaldırılır).
+  moderatörler** başkasının mesajını da silebilir; bu durumda da doküman
+  kaldırılmaz, içerik temizlenir (böylece geri alınabilir).
 - Onay penceresi vardır: yanlışlıkla silme olmaz.
+- **Geri al:** silme işleminden sonra ekranın altında **5 saniyelik**
+  "Geri al" bildirimi çıkar. Dokunursan mesaj eski hâline döner (metin,
+  fotoğraf, ses süresi). "Benden sil"de gizleme kaydı silinir; "herkesten
+  sil"de içerik geri yazılır. 5 saniye geçerse işlem kalıcıdır.
 
 **Fotoğraf görüntüleme:** fotoğrafa dokun → tam ekran siyah görüntüleyici
 (pinch ile 1–5x yakınlaştırma, dokununca üst bar gizlenir, ✕ ile kapanır).

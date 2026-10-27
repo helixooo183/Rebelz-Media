@@ -297,7 +297,7 @@ service cloud.firestore {
           && request.resource.data.keys().hasOnly([
                'senderId', 'senderName', 'senderPhotoUrl', 'text', 'type',
                'mediaBase64', 'mediaMime', 'durationMs', 'reply', 'reactions',
-               'readBy', 'deleted', 'editedAt', 'createdAt',
+               'readBy', 'deleted', 'editedAt', 'createdAt', 'deletedBy',
              ])
           && isNonEmptyString(request.resource.data.senderName, 80)
           && request.resource.data.type in ['text', 'image', 'audio', 'system']
@@ -317,14 +317,25 @@ service cloud.firestore {
           // Kanala yalnızca sahibi/moderatörü yazar (izin açıksa herkes).
           && (!isChannel() || isRoomOwner() || isRoomMod() || !onlyModsPost());
 
-        // Tepki, okundu, düzenleme ve "silindi" işaretleri.
+        // Tepki, okundu, düzenleme, "silindi" işareti ve geri alma.
         allow update: if isMember()
           && request.resource.data.diff(resource.data).affectedKeys()
                .hasOnly(['reactions', 'readBy', 'text', 'editedAt', 'deleted',
-                         'mediaBase64', 'mediaMime', 'durationMs'])
+                         'mediaBase64', 'mediaMime', 'durationMs',
+                         'deletedBy'])
           && (request.resource.data.diff(resource.data).affectedKeys()
                 .hasOnly(['reactions', 'readBy'])
-              || resource.data.senderId == request.auth.uid);
+              // Gönderen kendi mesajını düzenler/siler/geri alır.
+              || resource.data.senderId == request.auth.uid
+              // Yetkili moderatör/sahip yalnızca içerik alanlarını temizleyip
+              // "silindi" işaretleyebilir (veya geri alabilir).
+              || (room().get('permissions', {})
+                      .get('modsDeleteMessages', false) == true
+                  && (isRoomOwner() || isRoomMod())
+                  && request.resource.data.diff(resource.data).affectedKeys()
+                       .hasOnly(['text', 'mediaBase64', 'mediaMime',
+                                 'durationMs', 'deleted', 'deletedBy',
+                                 'editedAt'])));
 
         // Sohbeti silme akışı için üyeler mesajları kaldırabilir.
         // Kanal/gruplarda moderatörler yalnızca izin verildiyse silebilir.

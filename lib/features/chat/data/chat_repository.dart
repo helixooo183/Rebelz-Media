@@ -301,29 +301,65 @@ class ChatRepository {
   }
 
   /// Mesajı siler (içerik temizlenir, "silindi" olarak görünür).
+  ///
+  /// `deletedBy` alanı kimin sildiğini tutar; 5 saniyelik "geri al" bildirimi
+  /// [restoreMessage] ile içeriği geri yazar.
   Future<void> deleteMessage(String roomId, String messageId) async {
-    _requireUid();
+    final uid = _requireUid();
     await _rooms.doc(roomId).collection('messages').doc(messageId).set({
       'text': '',
       'mediaBase64': '',
       'mediaMime': '',
       'durationMs': 0,
       'deleted': true,
+      'deletedBy': uid,
       'editedAt': FieldValue.serverTimestamp(),
     }, SetOptions(merge: true));
   }
 
   /// Moderatör/sahip: başkasının mesajını herkesten siler.
   ///
-  /// Mesaj dokümanı kaldırılır (kural: `modsDeleteMessages` izni varsa
-  /// sahip/moderatör silebilir). Kendi mesajında [deleteMessage] kullanılır,
-  /// böylece "Bu mesaj silindi" izi kalır.
+  /// Doküman **kaldırılmaz**, içerik temizlenip `deleted` işaretlenir; böylece
+  /// 5 saniyelik "geri al" çalışabilir. Kural: `modsDeleteMessages` izni varsa
+  /// sahip/moderatör bu alanları güncelleyebilir.
   Future<void> deleteMessageAsModerator(
     String roomId,
     String messageId,
   ) async {
+    final uid = _requireUid();
+    await _rooms.doc(roomId).collection('messages').doc(messageId).set({
+      'text': '',
+      'mediaBase64': '',
+      'mediaMime': '',
+      'durationMs': 0,
+      'deleted': true,
+      'deletedBy': uid,
+      'editedAt': FieldValue.serverTimestamp(),
+    }, SetOptions(merge: true));
+  }
+
+  /// Silme işlemini geri alır: mesajın içeriğini yeniden yazar.
+  ///
+  /// "Geri al" bildirimi 5 saniye görünür; süre bitmeden çağrılırsa mesaj
+  /// eski hâline döner (metin, fotoğraf, ses süresi, düzenleme zamanı).
+  Future<void> restoreMessage(String roomId, ChatMessage message) async {
     _requireUid();
-    await _rooms.doc(roomId).collection('messages').doc(messageId).delete();
+    final data = <String, dynamic>{
+      'text': message.text,
+      'mediaBase64': message.mediaBase64,
+      'mediaMime': message.mediaMime,
+      'durationMs': message.durationMs,
+      'deleted': false,
+      'deletedBy': FieldValue.delete(),
+      'editedAt': message.editedAt == null
+          ? FieldValue.delete()
+          : Timestamp.fromDate(message.editedAt!),
+    };
+    await _rooms
+        .doc(roomId)
+        .collection('messages')
+        .doc(message.id)
+        .set(data, SetOptions(merge: true));
   }
 
   /// "Benden sil": mesaj yalnızca bu kullanıcıda gizlenir.
@@ -342,6 +378,17 @@ class ChatRepository {
       'messageId': messageId,
       'createdAt': FieldValue.serverTimestamp(),
     });
+  }
+
+  /// "Benden sil" işlemini geri alır (gizleme kaydı silinir).
+  Future<void> unhideMessage(String roomId, String messageId) async {
+    final uid = _requireUid();
+    await _db
+        .collection('users')
+        .doc(uid)
+        .collection('hiddenMessages')
+        .doc('${roomId}__$messageId')
+        .delete();
   }
 
   /// Bu sohbette benim gizlediğim mesaj kimlikleri.

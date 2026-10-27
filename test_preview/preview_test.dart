@@ -189,6 +189,12 @@ class _FakeChatRepository implements ChatRepository {
   Future<void> deleteMessageAsModerator(String roomId, String messageId) async {}
 
   @override
+  Future<void> restoreMessage(String roomId, ChatMessage message) async {}
+
+  @override
+  Future<void> unhideMessage(String roomId, String messageId) async {}
+
+  @override
   Future<void> setPermission(
     String roomId,
     String key, {
@@ -717,6 +723,37 @@ void main() {
     await expectLater(
       find.byType(MaterialApp),
       matchesGoldenFile('goldens/20_message_actions.png'),
+    );
+  });
+
+  testWidgets('21 silme geri al bildirimi', (tester) async {
+    await tester.pumpWidget(
+      _wrap(
+        ChatScreen(
+          roomId: 'r1',
+          roomName: 'Tasarım Ekibi',
+          repository: _FakeChatRepository(rooms: rooms, messages: messages),
+          userRepository: users,
+          currentUserId: 'u1',
+        ),
+      ),
+    );
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 50));
+
+    await tester.longPress(
+      find.text('Süper! Yarın giriş ekranını da bitiriyorum.').first,
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Benden sil'));
+    await tester.pumpAndSettle();
+
+    // 5 saniyelik geri alma bildirimi görünür kalmalı.
+    expect(find.text('Geri al'), findsOneWidget);
+    await expectLater(
+      find.byType(MaterialApp),
+      matchesGoldenFile('goldens/21_undo_snackbar.png'),
     );
   });
 

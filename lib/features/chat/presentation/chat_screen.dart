@@ -272,13 +272,53 @@ class _ChatScreenState extends State<ChatScreen> {
     }
   }
 
+  /// 5 saniyelik "Geri al" bildirimi (ekranın altından çıkar).
+  void _showUndo({
+    required String text,
+    required Future<void> Function() onUndo,
+    String undoLabel = 'Geri al',
+  }) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(
+        SnackBar(
+          content: Text(text),
+          duration: const Duration(seconds: 5),
+          behavior: SnackBarBehavior.floating,
+          margin: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
+          action: SnackBarAction(
+            label: undoLabel,
+            onPressed: () async {
+              try {
+                await onUndo();
+                if (mounted) _toast('Mesaj geri alındı.');
+              } catch (e) {
+                if (mounted) _toast('Geri alınamadı: $e');
+              }
+            },
+          ),
+        ),
+      );
+  }
+
   /// "Benden sil": mesaj yalnızca bu kullanıcıda kaybolur.
   Future<void> _hideForMe(ChatMessage message) async {
     try {
       await _repository.hideMessageForMe(widget.roomId, message.id);
       if (!mounted) return;
       setState(() => _hiddenIds = {..._hiddenIds, message.id});
-      _toast('Mesaj senden gizlendi.');
+      _showUndo(
+        text: 'Mesaj senden gizlendi.',
+        onUndo: () async {
+          await _repository.unhideMessage(widget.roomId, message.id);
+          if (!mounted) return;
+          setState(() => _hiddenIds = {..._hiddenIds}..remove(message.id));
+        },
+      );
     } catch (e) {
       _toast('Mesaj gizlenemedi: $e');
     }
@@ -292,8 +332,10 @@ class _ChatScreenState extends State<ChatScreen> {
         title: const Text('Herkesten silinsin mi?'),
         content: Text(
           mine
-              ? 'Mesaj tüm üyelerden silinecek. Bu işlem geri alınamaz.'
-              : 'Bu mesaj tüm üyelerden silinecek (moderatör işlemi).',
+              ? 'Mesaj tüm üyelerden silinecek. 5 saniye içinde geri '
+                  'alabilirsin.'
+              : 'Bu mesaj tüm üyelerden silinecek (moderatör işlemi). '
+                  '5 saniye içinde geri alabilirsin.',
         ),
         actions: [
           TextButton(
@@ -315,7 +357,11 @@ class _ChatScreenState extends State<ChatScreen> {
       } else {
         await _repository.deleteMessageAsModerator(widget.roomId, message.id);
       }
-      _toast('Mesaj herkesten silindi.');
+      if (!mounted) return;
+      _showUndo(
+        text: 'Mesaj herkesten silindi.',
+        onUndo: () => _repository.restoreMessage(widget.roomId, message),
+      );
     } catch (e) {
       _toast('Mesaj silinemedi: $e');
     }
