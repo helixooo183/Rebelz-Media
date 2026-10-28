@@ -126,6 +126,7 @@ class ChatRepository {
     }
 
     final myName = (_auth.currentUser?.displayName ?? '').trim();
+    final myPhoto = (_auth.currentUser?.photoURL ?? '').trim();
 
     if (!exists) {
       await roomRef.set({
@@ -139,7 +140,9 @@ class ChatRepository {
         'lastMessage': '',
         'lastMessageAt': FieldValue.serverTimestamp(),
         'memberNames': {uid: myName, peerUid: peerName.trim()},
-        'memberPhotos': {uid: '', peerUid: peerPhotoUrl.trim()},
+        // Kendi fotoğrafımız da yazılır; aksi hâlde karşı taraf bizi
+        // fotoğrafsız görüyordu (bizim kaydımız boş bırakılıyordu).
+        'memberPhotos': {uid: myPhoto, peerUid: peerPhotoUrl.trim()},
       });
       return roomId;
     }
@@ -153,6 +156,7 @@ class ChatRepository {
       'memberNames.$uid': myName,
       'memberNames.$peerUid': peerName.trim(),
       'memberPhotos.$peerUid': peerPhotoUrl.trim(),
+      if (myPhoto.isNotEmpty) 'memberPhotos.$uid': myPhoto,
     });
 
     return roomId;
@@ -466,6 +470,7 @@ class ChatRepository {
       throw const ChatException('Kanal adı en fazla 80 karakter olabilir.');
     }
 
+    final myPhoto = (_auth.currentUser?.photoURL ?? '').trim();
     final ref = _rooms.doc();
     await ref.set({
       'name': trimmed,
@@ -482,6 +487,10 @@ class ChatRepository {
       'lastMessageAt': FieldValue.serverTimestamp(),
       'createdAt': FieldValue.serverTimestamp(),
       'memberNames': {uid: (_auth.currentUser?.displayName ?? '').trim()},
+      // Yalnızca http(s) fotoğraf: galeriden seçilen base64 avatar oda
+      // dokümanına kopyalanmaz (arayüz canlı profilden çözer).
+      if (myPhoto.startsWith('http'))
+        'memberPhotos': {uid: myPhoto},
     });
     return ref.id;
   }
@@ -518,9 +527,15 @@ class ChatRepository {
       throw const ChatException('Kanal bulunamadı.');
     }
     if (state.memberIds.contains(uid)) return;
+    final myName = (_auth.currentUser?.displayName ?? '').trim();
     await _rooms.doc(roomId).update({
       'memberIds': FieldValue.arrayUnion([uid]),
       if (state.isChannel) 'subscriberCount': FieldValue.increment(1),
+      // Üye listesinde "Kullanıcı" yerine gerçek ad görünsün diye ad da
+      // yazılır (katılma bloğu `memberNames` değişimine izin verir;
+      // `memberPhotos` bu blokta yazılamaz — fotoğraflar arayüzde canlı
+      // profilden çözülür).
+      if (myName.isNotEmpty) 'memberNames.$uid': myName,
     });
   }
 
@@ -604,12 +619,29 @@ class ChatRepository {
   }
 
   /// Üyeyi moderatör yapar ya da moderatörlüğünü kaldırır.
+  ///
+  /// Moderatörlük yalnızca halihazırda oda üyesi olan birine verilebilir;
+  /// kanal dışından biri bu yolla (otomatik üye yapılarak) moderatör
+  /// olamaz. Moderatörlüğü kaldırmak için üyelik şartı aranmaz — ayrılmış
+  /// birinin eski rol kaydı da temizlenebilmeli.
   Future<void> setModerator(
     String roomId,
     String uid, {
     required bool moderator,
   }) async {
     _requireUid();
+    if (moderator) {
+      final state = await _fetchRoomState(roomId);
+      if (!state.exists) {
+        throw const ChatException('Kanal/grup bulunamadı.');
+      }
+      if (!state.memberIds.contains(uid)) {
+        throw const ChatException(
+          'Yalnızca kanal üyeleri moderatör yapılabilir. '
+          'Kişi önce kanala katılmalı.',
+        );
+      }
+    }
     await _rooms.doc(roomId).update({
       'roles.$uid': moderator ? ChatRoom.roleModerator : ChatRoom.roleMember,
     });
@@ -708,6 +740,10 @@ class ChatRepository {
   }
 
   /// Bir üyenin oda içindeki profil bilgisi (ad/fotoğraf).
+  ///
+  /// Fotoğraf olduğu gibi döndürülür (galeriden seçilmiş `data:` URI'si
+  /// dahil): avatar gösteriminde kullanılmak içindir. Oda dokümanına
+  /// yazarken base64'ü elemek çağıranın sorumluluğudur ([addMember] eler).
   Future<Map<String, String>> fetchMemberInfo(String uid) async {
     try {
       final doc = await _db.collection('users').doc(uid).get();
@@ -715,7 +751,7 @@ class ChatRepository {
       final photo = (data['photoUrl'] as String?)?.trim() ?? '';
       return {
         'name': (data['displayName'] as String?)?.trim() ?? '',
-        'photoUrl': photo.startsWith('data:') ? '' : photo,
+        'photoUrl': photo,
       };
     } catch (_) {
       return const <String, String>{};

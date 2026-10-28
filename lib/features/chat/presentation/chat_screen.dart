@@ -12,6 +12,7 @@ import '../../../core/widgets/empty_state.dart';
 import '../../../core/widgets/user_avatar.dart';
 import '../../moderation/presentation/report_sheet.dart';
 import '../../profile/data/user_repository.dart';
+import '../../profile/domain/user_profile.dart';
 import '../data/chat_repository.dart';
 import '../domain/models/chat_message.dart';
 import '../domain/models/chat_room.dart';
@@ -67,6 +68,16 @@ class _ChatScreenState extends State<ChatScreen> {
   bool _iBlockedPeer = false;
   bool _isBusy = false;
   bool _isSending = false;
+
+  /// Mesaj gönderenlerin ve DM karşı tarafının canlı profilleri.
+  ///
+  /// Balon/başlık avatarı eskiden oda dokümanındaki `memberPhotos`
+  /// kopyasına (başlık) ya da hiç fotoğrafa (balon) dayanıyordu; kanal
+  /// katılmasında fotoğraf yazılmadığı ve galeri (base64) avatarları
+  /// oda dokümanına kopyalanmadığı için sohbet açılınca çoğu kişi baş
+  /// harfle görünüyordu. Birincil kaynak artık `users/{uid}` profili.
+  final Map<String, UserProfile> _profiles = {};
+  final Set<String> _requestedProfiles = {};
 
   /// Yanıtlanan mesaj (alıntı).
   ChatMessage? _replyTo;
@@ -147,6 +158,56 @@ class _ChatScreenState extends State<ChatScreen> {
     } catch (_) {
       // Engel durumu okunamazsa sohbet normal çalışır.
     }
+  }
+
+  /// Verilen uid'lerin profillerini (henüz yüklenmemişse) getirir.
+  Future<void> _loadProfiles(Iterable<String> uids) async {
+    final repo = _userRepo;
+    if (repo == null) return;
+    final missing = uids
+        .where((id) =>
+            id.isNotEmpty &&
+            id != _myUid &&
+            !_profiles.containsKey(id) &&
+            !_requestedProfiles.contains(id))
+        .toList();
+    if (missing.isEmpty) return;
+    _requestedProfiles.addAll(missing);
+    try {
+      final fetched = await Future.wait(missing.map(repo.fetchProfile));
+      if (!mounted) return;
+      setState(() {
+        for (var i = 0; i < missing.length; i++) {
+          final profile = fetched[i];
+          if (profile != null) _profiles[missing[i]] = profile;
+        }
+      });
+    } catch (_) {
+      // Profil okunamazsa avatarlar yedek kaynaklarla (mesaj/oda
+      // kayıtları) gösterilmeye devam eder.
+    }
+  }
+
+  /// Build içinden güvenli tetikleme (eksik profil varsa kare sonunda).
+  void _ensureProfiles(Iterable<String> uids) {
+    final hasMissing = uids.any((id) =>
+        id.isNotEmpty &&
+        id != _myUid &&
+        !_profiles.containsKey(id) &&
+        !_requestedProfiles.contains(id));
+    if (!hasMissing) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _loadProfiles(uids);
+    });
+  }
+
+  /// DM başlığındaki kişinin güncel fotoğrafı.
+  String? _peerPhotoOf(ChatRoom? room) {
+    if (room == null) return null;
+    final peer = room.peerUid(_myUid);
+    final live = peer == null ? '' : (_profiles[peer]?.photoUrl.trim() ?? '');
+    if (live.isNotEmpty) return live;
+    return room.peerPhoto(_myUid);
   }
 
   // -------------------------------------------------------------- yazıyor…
@@ -696,6 +757,9 @@ class _ChatScreenState extends State<ChatScreen> {
         final room = roomSnapshot.data;
         final title = _titleOf(room);
         final subtitle = _subtitleOf(room);
+        final peerUid = room?.isDirect == true ? room!.peerUid(_myUid) : null;
+        if (peerUid != null) _ensureProfiles([peerUid]);
+        final peerProfile = peerUid == null ? null : _profiles[peerUid];
 
         return Scaffold(
           appBar: AppBar(
@@ -706,8 +770,10 @@ class _ChatScreenState extends State<ChatScreen> {
                   name: title,
                   size: 38,
                   photoUrl: room?.isDirect == true
-                      ? room?.peerPhoto(_myUid)
+                      ? _peerPhotoOf(room)
                       : room?.photoUrl,
+                  emoji: peerProfile?.avatarEmoji ?? '',
+                  colorIndex: peerProfile?.avatarColor ?? 0,
                   isGroup: room?.isGroup ?? false,
                 ),
                 const SizedBox(width: 12),
@@ -884,6 +950,14 @@ class _ChatScreenState extends State<ChatScreen> {
                         .where((m) => !_hiddenIds.contains(m.id))
                         .toList();
                     _markReadIfNeeded(messages);
+                    // Balon avatarları için gönderen profillerini yükle
+                    // (yalnızca avatar gösterilen odalarda anlamlı, ama
+                    // benzer istekler önbellekle elenir).
+                    if (room?.isDirect == false) {
+                      _ensureProfiles(
+                        messages.map((m) => m.senderId).toSet(),
+                      );
+                    }
 
                     if (messages.isEmpty) {
                       return EmptyState(
@@ -918,9 +992,24 @@ class _ChatScreenState extends State<ChatScreen> {
                                 room.moderatorlerMesajSilebilir &&
                                 room.yonetebilirMi(_myUid));
 
+                        final senderProfile = _profiles[message.senderId];
+                        final senderPhoto = () {
+                          final live =
+                              senderProfile?.photoUrl.trim() ?? '';
+                          if (live.isNotEmpty) return live;
+                          if (message.senderPhotoUrl.trim().isNotEmpty) {
+                            return message.senderPhotoUrl;
+                          }
+                          return room?.memberPhotos[message.senderId] ?? '';
+                        }();
+
                         return _MessageBubble(
                           message: message,
                           isMine: isMine,
+                          senderPhotoUrl: senderPhoto,
+                          senderEmoji: senderProfile?.avatarEmoji ?? '',
+                          senderColorIndex:
+                              senderProfile?.avatarColor ?? 0,
                           canDeleteForEveryone: canDeleteForEveryone,
                           onOpenImage: () => _openImage(message),
                           onHideForMe: () => _hideForMe(message),
@@ -989,8 +1078,11 @@ class _ChatScreenState extends State<ChatScreen> {
   String _titleOf(ChatRoom? room) {
     if (room == null) return widget.roomName;
     if (room.isDirect) {
-      final peer = room.peerName(_myUid);
-      return peer.trim().isEmpty ? widget.roomName : peer;
+      final peer = room.peerUid(_myUid);
+      final live = peer == null ? '' : (_profiles[peer]?.displayName.trim() ?? '');
+      if (live.isNotEmpty) return live;
+      final name = room.peerName(_myUid);
+      return name.trim().isEmpty ? widget.roomName : name;
     }
     return room.name;
   }
@@ -1031,10 +1123,19 @@ class _MessageBubble extends StatelessWidget {
     required this.onOpenImage,
     this.canDeleteForEveryone = false,
     this.myReaction,
+    this.senderPhotoUrl = '',
+    this.senderEmoji = '',
+    this.senderColorIndex = 0,
   });
 
   final ChatMessage message;
   final bool isMine;
+
+  /// Gönderenin avatarı: canlı profil > mesaja yazılmış fotoğraf >
+  /// oda kaydındaki fotoğraf sırasıyla üst katmanda çözülür.
+  final String senderPhotoUrl;
+  final String senderEmoji;
+  final int senderColorIndex;
 
   /// "Herkesten sil" gösterilsin mi? (kendi mesajı veya yetkili moderatör)
   final bool canDeleteForEveryone;
@@ -1218,7 +1319,13 @@ class _MessageBubble extends StatelessWidget {
             SizedBox(
               width: 30,
               child: showAvatar
-                  ? UserAvatar(name: message.senderName, size: 28)
+                  ? UserAvatar(
+                      name: message.senderName,
+                      size: 28,
+                      photoUrl: senderPhotoUrl,
+                      emoji: senderEmoji,
+                      colorIndex: senderColorIndex,
+                    )
                   : null,
             ),
           if (!isMine) const SizedBox(width: 7),

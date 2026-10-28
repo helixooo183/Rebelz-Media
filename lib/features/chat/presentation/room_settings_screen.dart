@@ -58,6 +58,50 @@ class _RoomSettingsScreenState extends State<RoomSettingsScreen> {
 
   bool _isBusy = false;
 
+  /// Üyelerin canlı profilleri (`users/{uid}`).
+  ///
+  /// Üye satırlarında ad/fotoğraf oda dokümanındaki `memberNames` /
+  /// `memberPhotos` kopyasından okunuyordu; kanala katılırken fotoğraf
+  /// hiç yazılmadığı (ve base64 avatarlar bilerek kopyalanmadığı) için
+  /// neredeyse herkes baş harfle görünüyordu. Artık birincil kaynak
+  /// canlı profil; oda kayıtları yalnızca yedek.
+  final Map<String, UserProfile> _memberProfiles = {};
+  final Set<String> _requestedProfiles = {};
+
+  /// Verilen üyelerin profillerini (henüz yüklenmemişse) getirir.
+  Future<void> _loadMemberProfiles(Iterable<String> uids) async {
+    final users = _userRepo;
+    if (users == null) return;
+    final missing = uids
+        .where((id) =>
+            id.isNotEmpty &&
+            !_memberProfiles.containsKey(id) &&
+            !_requestedProfiles.contains(id))
+        .toList();
+    if (missing.isEmpty) return;
+    _requestedProfiles.addAll(missing);
+    final fetched = await Future.wait(missing.map(users.fetchProfile));
+    if (!mounted) return;
+    setState(() {
+      for (var i = 0; i < missing.length; i++) {
+        final profile = fetched[i];
+        if (profile != null) _memberProfiles[missing[i]] = profile;
+      }
+    });
+  }
+
+  /// Build içinden güvenli tetikleme (eksik profil varsa kare sonunda).
+  void _ensureMemberProfiles(Iterable<String> uids) {
+    final hasMissing = uids.any((id) =>
+        id.isNotEmpty &&
+        !_memberProfiles.containsKey(id) &&
+        !_requestedProfiles.contains(id));
+    if (!hasMissing) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _loadMemberProfiles(uids);
+    });
+  }
+
   void _toast(String message) {
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
@@ -273,34 +317,54 @@ class _RoomSettingsScreenState extends State<RoomSettingsScreen> {
     );
   }
 
-  /// Kullanıcı adıyla arayıp moderatör ekler (gerekiyorsa üyeliği de açar).
+  /// Kanal üyeleri arasından moderatör seçer.
+  ///
+  /// Kanalda olmayan bir kişi buradan (otomatik üye yapılarak) moderatör
+  /// olamaz; önce kanala katılması gerekir. Liste bu yüzden yalnızca
+  /// mevcut üyelerden oluşur — sahip, kişinin kendisi ve zaten
+  /// moderatör olanlar hariç.
   Future<void> _addModerator(ChatRoom room) async {
-    final users = _userRepo;
-    if (users == null) {
-      _toast('Kullanıcı araması şu an kullanılamıyor.');
+    final eligible = room.memberIds
+        .where((uid) =>
+            uid != _myUid && !room.sahipMi(uid) && !room.moderatorMu(uid))
+        .toList();
+    if (eligible.isEmpty) {
+      _toast(
+        'Moderatör yapılabilecek başka üye yok. '
+        'Kişi önce kanala katılmalı.',
+      );
       return;
     }
+
+    await _loadMemberProfiles(eligible);
+    if (!mounted) return;
+
+    final candidates = <UserProfile>[
+      for (final uid in eligible)
+        _memberProfiles[uid] ??
+            UserProfile(
+              uid: uid,
+              displayName:
+                  (room.memberNames[uid]?.trim().isNotEmpty ?? false)
+                      ? room.memberNames[uid]!.trim()
+                      : 'Kullanıcı',
+              photoUrl: room.memberPhotos[uid] ?? '',
+            ),
+    ]..sort((a, b) =>
+        a.displayName.toLowerCase().compareTo(b.displayName.toLowerCase()));
 
     final picked = await showModalBottomSheet<UserProfile>(
       context: context,
       isScrollControlled: true,
       showDragHandle: true,
-      builder: (_) => _UserSearchSheet(users: users),
+      builder: (_) => _MemberPickerSheet(candidates: candidates),
     );
     if (picked == null) return;
 
-    await _run(() async {
-      if (!room.memberIds.contains(picked.uid)) {
-        final info = await _repo.fetchMemberInfo(picked.uid);
-        await _repo.addMember(
-          widget.roomId,
-          uid: picked.uid,
-          name: info['name'] ?? picked.displayName,
-          photoUrl: info['photoUrl'] ?? '',
-        );
-      }
-      await _repo.setModerator(widget.roomId, picked.uid, moderator: true);
-    }, '${picked.displayName} moderatör olarak eklendi.');
+    await _run(
+      () => _repo.setModerator(widget.roomId, picked.uid, moderator: true),
+      '${picked.displayName} moderatör olarak eklendi.',
+    );
   }
 
   /// Yeni davet bağlantısı üretir ve panoya kopyalar.
@@ -385,6 +449,7 @@ class _RoomSettingsScreenState extends State<RoomSettingsScreen> {
       stream: _roomStream,
       builder: (context, snapshot) {
         final room = snapshot.data;
+        if (room != null) _ensureMemberProfiles(room.memberIds);
 
         return Scaffold(
           appBar: AppBar(
@@ -534,6 +599,7 @@ class _RoomSettingsScreenState extends State<RoomSettingsScreen> {
                               uid: uid,
                               roleLabel: 'Moderatör',
                               myUid: _myUid,
+                              profile: _memberProfiles[uid],
                               onTap: () => _memberActions(room, uid),
                             ),
                           ListTile(
@@ -551,7 +617,7 @@ class _RoomSettingsScreenState extends State<RoomSettingsScreen> {
                               ),
                             ),
                             subtitle: Text(
-                              'Kullanıcı adıyla ara ve yetki ver.',
+                              'Kanal üyelerinden seç ve yetki ver.',
                               style: TextStyle(
                                 fontSize: 11.5,
                                 color: context.muted,
@@ -575,6 +641,7 @@ class _RoomSettingsScreenState extends State<RoomSettingsScreen> {
                                     ? 'Moderatör'
                                     : 'Üye',
                             myUid: _myUid,
+                            profile: _memberProfiles[uid],
                             onTap: () => _memberActions(room, uid),
                           ),
                       ],
@@ -627,9 +694,12 @@ class _RoomSettingsScreenState extends State<RoomSettingsScreen> {
       return;
     }
 
-    final name = (room.memberNames[uid]?.trim().isNotEmpty ?? false)
-        ? room.memberNames[uid]!.trim()
-        : 'Kullanıcı';
+    final liveName = _memberProfiles[uid]?.displayName.trim() ?? '';
+    final name = liveName.isNotEmpty
+        ? liveName
+        : (room.memberNames[uid]?.trim().isNotEmpty ?? false)
+            ? room.memberNames[uid]!.trim()
+            : 'Kullanıcı';
 
     final isMod = room.moderatorMu(uid);
     final isOwner = room.sahipMi(_myUid);
@@ -799,6 +869,7 @@ class _MemberRow extends StatelessWidget {
     required this.roleLabel,
     required this.myUid,
     required this.onTap,
+    this.profile,
   });
 
   final ChatRoom room;
@@ -807,18 +878,30 @@ class _MemberRow extends StatelessWidget {
   final String? myUid;
   final VoidCallback onTap;
 
+  /// Üyenin canlı profili; ad/fotoğraf/emoji/renk önce buradan okunur
+  /// (oda dokümanındaki kopyalar eksik ya da bayat olabiliyor).
+  final UserProfile? profile;
+
   @override
   Widget build(BuildContext context) {
-    final name = (room.memberNames[uid]?.trim().isNotEmpty ?? false)
-        ? room.memberNames[uid]!.trim()
-        : 'Kullanıcı';
+    final liveName = profile?.displayName.trim() ?? '';
+    final name = liveName.isNotEmpty
+        ? liveName
+        : (room.memberNames[uid]?.trim().isNotEmpty ?? false)
+            ? room.memberNames[uid]!.trim()
+            : 'Kullanıcı';
+    final photo = (profile?.photoUrl.trim().isNotEmpty ?? false)
+        ? profile!.photoUrl
+        : room.memberPhotos[uid] ?? '';
 
     return ListTile(
       contentPadding: const EdgeInsets.symmetric(horizontal: 4),
       leading: UserAvatar(
         name: name,
         size: 38,
-        photoUrl: room.memberPhotos[uid],
+        photoUrl: photo,
+        emoji: profile?.avatarEmoji ?? '',
+        colorIndex: profile?.avatarColor ?? 0,
       ),
       title: Text(
         uid == myUid ? '$name (sen)' : name,
@@ -960,21 +1043,25 @@ class _Section extends StatelessWidget {
   }
 }
 
-/// Kullanıcı adı/görünen adla arayıp seçim yaptıran alt sayfa.
-class _UserSearchSheet extends StatefulWidget {
-  const _UserSearchSheet({required this.users});
+/// Moderatör seçimi için, yalnızca kanal üyelerinden oluşan seçici.
+///
+/// Global kullanıcı araması bilinçli olarak kaldırıldı: kanal dışından
+/// biri moderatör yapılamaz (önce kanala katılmalı). Adaylara yerel
+/// arama uygulanır (ad ya da @kullanıcı adı).
+class _MemberPickerSheet extends StatefulWidget {
+  const _MemberPickerSheet({required this.candidates});
 
-  final UserRepository users;
+  /// Moderatör olabilecek üyeler (sahip, kişinin kendisi ve mevcut
+  /// moderatörler elenmiş hâlde gelir).
+  final List<UserProfile> candidates;
 
   @override
-  State<_UserSearchSheet> createState() => _UserSearchSheetState();
+  State<_MemberPickerSheet> createState() => _MemberPickerSheetState();
 }
 
-class _UserSearchSheetState extends State<_UserSearchSheet> {
+class _MemberPickerSheetState extends State<_MemberPickerSheet> {
   final _controller = TextEditingController();
-  List<UserProfile> _results = const <UserProfile>[];
-  bool _isSearching = false;
-  bool _searched = false;
+  String _query = '';
 
   @override
   void dispose() {
@@ -982,37 +1069,19 @@ class _UserSearchSheetState extends State<_UserSearchSheet> {
     super.dispose();
   }
 
-  Future<void> _search(String raw) async {
-    final query = raw.trim();
-    if (query.length < 2) {
-      setState(() {
-        _results = const <UserProfile>[];
-        _searched = false;
-      });
-      return;
-    }
-
-    setState(() => _isSearching = true);
-    try {
-      final found = await widget.users.searchUsers(query);
-      if (!mounted) return;
-      setState(() {
-        _results = found;
-        _searched = true;
-      });
-    } catch (_) {
-      if (!mounted) return;
-      setState(() {
-        _results = const <UserProfile>[];
-        _searched = true;
-      });
-    } finally {
-      if (mounted) setState(() => _isSearching = false);
-    }
+  List<UserProfile> get _filtered {
+    final q = _query.trim().toLowerCase();
+    if (q.isEmpty) return widget.candidates;
+    return widget.candidates
+        .where((p) =>
+            p.displayName.toLowerCase().contains(q) ||
+            p.username.toLowerCase().contains(q))
+        .toList();
   }
 
   @override
   Widget build(BuildContext context) {
+    final filtered = _filtered;
     return Padding(
       padding: EdgeInsets.only(
         bottom: MediaQuery.viewInsetsOf(context).bottom,
@@ -1020,48 +1089,53 @@ class _UserSearchSheetState extends State<_UserSearchSheet> {
       child: SizedBox(
         height: MediaQuery.sizeOf(context).height * 0.72,
         child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             Padding(
-              padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-              child: TextField(
-                controller: _controller,
-                autofocus: true,
-                onChanged: _search,
-                decoration: InputDecoration(
-                  hintText: 'Kullanıcı adı ara',
-                  prefixIcon: const Icon(Icons.search_rounded, size: 20),
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(14),
+              padding: const EdgeInsets.fromLTRB(20, 4, 20, 10),
+              child: Text(
+                'Moderatör seç',
+                style: context.texts.titleMedium
+                    ?.copyWith(fontWeight: FontWeight.w700),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 0, 20, 10),
+              child: Text(
+                'Yalnızca kanal üyeleri moderatör olabilir.',
+                style: TextStyle(fontSize: 12.5, color: context.muted),
+              ),
+            ),
+            if (widget.candidates.length > 8)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+                child: TextField(
+                  controller: _controller,
+                  onChanged: (value) => setState(() => _query = value),
+                  decoration: InputDecoration(
+                    hintText: 'Üyelerde ara',
+                    prefixIcon: const Icon(Icons.search_rounded, size: 20),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(14),
+                    ),
                   ),
                 ),
               ),
-            ),
-            if (_isSearching)
-              const Padding(
-                padding: EdgeInsets.all(12),
-                child: SizedBox(
-                  height: 20,
-                  width: 20,
-                  child: CircularProgressIndicator(strokeWidth: 2),
-                ),
-              ),
             Expanded(
-              child: _results.isEmpty
+              child: filtered.isEmpty
                   ? Center(
                       child: Text(
-                        _searched
-                            ? 'Eşleşen kullanıcı yok.'
-                            : 'En az 2 karakter yaz.',
+                        'Eşleşen üye yok.',
                         style: TextStyle(fontSize: 13, color: context.muted),
                       ),
                     )
                   : ListView.separated(
                       padding: const EdgeInsets.fromLTRB(12, 0, 12, 16),
-                      itemCount: _results.length,
+                      itemCount: filtered.length,
                       separatorBuilder: (_, _) =>
                           Divider(height: 1, indent: 62, color: context.line),
                       itemBuilder: (context, index) {
-                        final profile = _results[index];
+                        final profile = filtered[index];
                         return ListTile(
                           leading: UserAvatar(
                             name: profile.displayName,
@@ -1087,6 +1161,11 @@ class _UserSearchSheetState extends State<_UserSearchSheet> {
                               fontSize: 12,
                               color: context.muted,
                             ),
+                          ),
+                          trailing: Icon(
+                            Icons.add_moderator_outlined,
+                            size: 20,
+                            color: context.colors.primary,
                           ),
                           onTap: () => Navigator.of(context).pop(profile),
                         );
