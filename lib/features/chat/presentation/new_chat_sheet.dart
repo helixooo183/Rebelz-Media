@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
+import '../../../core/services/firestore_errors.dart';
 import '../../../core/services/services.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/widgets/app_text_field.dart';
@@ -108,7 +109,7 @@ class _NewChatSheetState extends State<NewChatSheet> {
     } catch (e) {
       if (!mounted) return;
       setState(() {
-        _error = 'Kullanıcılar aranamadı. ($e)';
+        _error = 'Kullanıcılar aranamadı. ${friendlyFirestoreError(e)}';
         _hasSearched = true;
       });
     } finally {
@@ -128,7 +129,7 @@ class _NewChatSheetState extends State<NewChatSheet> {
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Sohbet açılamadı: $e')),
+        SnackBar(content: Text('Sohbet açılamadı: ${friendlyFirestoreError(e)}')),
       );
     }
   }

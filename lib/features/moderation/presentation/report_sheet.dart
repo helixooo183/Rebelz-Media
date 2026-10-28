@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../../core/services/firestore_errors.dart';
 import '../../../core/services/services.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../moderation/data/moderation_repository.dart';
@@ -105,7 +106,7 @@ class _ReportSheetState extends State<_ReportSheet> {
     } on ModerationException catch (e) {
       setState(() => _error = e.message);
     } catch (e) {
-      setState(() => _error = 'Şikayet gönderilemedi: $e');
+      setState(() => _error = 'Şikayet gönderilemedi: ${friendlyFirestoreError(e)}');
     } finally {
       if (mounted) setState(() => _isSending = false);
     }

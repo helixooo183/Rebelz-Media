@@ -144,13 +144,16 @@ class ChatRepository {
       return roomId;
     }
 
-    await roomRef.set({
+    // Doküman zaten var: noktalı alan yolları yalnızca `update()` ile
+    // iç içe alan olarak yorumlanır (`set()` bunları adı nokta içeren
+    // ayrı bir üst alan sayar ve güvenlik kuralları reddeder).
+    await roomRef.update({
       'type': RoomType.direct,
       'hiddenFor': FieldValue.arrayRemove([uid]),
       'memberNames.$uid': myName,
       'memberNames.$peerUid': peerName.trim(),
       'memberPhotos.$peerUid': peerPhotoUrl.trim(),
-    }, SetOptions(merge: true));
+    });
 
     return roomId;
   }
@@ -179,6 +182,14 @@ class ChatRepository {
     if (mediaBase64.length > 850000) {
       throw const ChatException('Medya çok büyük. Daha küçük bir dosya seç.');
     }
+    // Güvenlik kuralları bu sınırları ister; aşılırsa ham
+    // `permission-denied` yerine anlaşılır mesaj gösterilir.
+    if (mediaMime.length > 80) {
+      throw const ChatException('Medya türü geçersiz görünüyor.');
+    }
+    if (durationMs < 0 || durationMs > 300000) {
+      throw const ChatException('Sesli mesaj en fazla 5 dakika olabilir.');
+    }
 
     final user = _auth.currentUser!;
     final roomRef = _rooms.doc(roomId);
@@ -186,12 +197,16 @@ class ChatRepository {
     final room = roomSnapshot.exists ? ChatRoom.fromDoc(roomSnapshot) : null;
 
     if (room == null) throw const ChatException('Sohbet bulunamadı.');
-    if (room.isChannel) {
-      if (room.ownerUid != uid) {
-        throw const ChatException('Bu kanalda yalnızca sahibi paylaşım yapar.');
-      }
-    } else if (!room.hasMember(uid)) {
+    // Üyelik her türde şart; kanalda ayrıca paylaşım izni aranır.
+    // `paylasabilirMi` sahip + moderatör + `onlyModsPost` kapalıyken
+    // tüm aboneleri kapsar (arayüz ve güvenlik kurallarıyla aynı karar).
+    if (!room.hasMember(uid)) {
       throw const ChatException('Bu sohbete erişimin yok.');
+    }
+    if (room.isChannel && !room.paylasabilirMi(uid)) {
+      throw const ChatException(
+        'Bu kanalda yalnızca moderatörler paylaşım yapar.',
+      );
     }
 
     final peerUid = room.peerUid(uid);
@@ -201,9 +216,14 @@ class ChatRepository {
       );
     }
 
-    final senderName = (user.displayName ?? '').trim().isEmpty
+    // Kural `senderName` için en fazla 80 karakter ister; uzun görünen
+    // adlar sessizce kırpılır (mesaj bu yüzden reddedilmesin).
+    final rawSenderName = (user.displayName ?? '').trim().isEmpty
         ? 'Kullanıcı'
         : user.displayName!.trim();
+    final senderName = rawSenderName.runes.length > 80
+        ? String.fromCharCodes(rawSenderName.runes.take(80))
+        : rawSenderName;
 
     var senderPhotoUrl = user.photoURL ?? '';
     try {
@@ -242,13 +262,15 @@ class ChatRepository {
       'createdAt': FieldValue.serverTimestamp(),
     });
 
-    batch.set(roomRef, {
+    // Noktalı alan yolu (`typing.$uid`) için `update` şart; oda
+    // dokümanının varlığı yukarıda doğrulandı.
+    batch.update(roomRef, {
       'lastMessage': preview,
       'lastMessageAt': FieldValue.serverTimestamp(),
       'lastSenderId': uid,
       'hiddenFor': <String>[],
       'typing.$uid': FieldValue.delete(),
-    }, SetOptions(merge: true));
+    });
 
     await batch.commit();
   }
@@ -258,10 +280,10 @@ class ChatRepository {
     final uid = _myUid;
     if (uid == null) return;
     try {
-      await _rooms.doc(roomId).set({
+      await _rooms.doc(roomId).update({
         'typing.$uid':
             typing ? FieldValue.serverTimestamp() : FieldValue.delete(),
-      }, SetOptions(merge: true));
+      });
     } catch (_) {
       // Gösterge kritik değil.
     }
@@ -272,9 +294,9 @@ class ChatRepository {
     final uid = _myUid;
     if (uid == null) return;
     try {
-      await _rooms.doc(roomId).set({
+      await _rooms.doc(roomId).update({
         'readAt.$uid': FieldValue.serverTimestamp(),
-      }, SetOptions(merge: true));
+      });
     } catch (_) {
       // Sessiz geç.
     }
@@ -294,10 +316,10 @@ class ChatRepository {
         ? rawReactions[uid]?.toString()
         : null;
 
-    await ref.set({
+    await ref.update({
       'reactions.$uid':
           current == emoji ? FieldValue.delete() : emoji,
-    }, SetOptions(merge: true));
+    });
   }
 
   /// Mesajı siler (içerik temizlenir, "silindi" olarak görünür).
@@ -368,12 +390,15 @@ class ChatRepository {
   /// başka kimse göremez ve mesaj diğer üyeler için silinmez.
   Future<void> hideMessageForMe(String roomId, String messageId) async {
     final uid = _requireUid();
-    await _db
+    final ref = _db
         .collection('users')
         .doc(uid)
         .collection('hiddenMessages')
-        .doc('${roomId}__$messageId')
-        .set({
+        .doc('${roomId}__$messageId');
+    // Kural bu dokümanlarda `update` kabul etmez (kanıt niteliği);
+    // kayıt zaten varsa ikinci kez yazmak reddedilir — sessizce geç.
+    if ((await ref.get()).exists) return;
+    await ref.set({
       'roomId': roomId,
       'messageId': messageId,
       'createdAt': FieldValue.serverTimestamp(),
@@ -437,6 +462,9 @@ class ChatRepository {
     if (trimmed.length < 3) {
       throw const ChatException('Kanal adı en az 3 karakter olmalı.');
     }
+    if (trimmed.length > 80) {
+      throw const ChatException('Kanal adı en fazla 80 karakter olabilir.');
+    }
 
     final ref = _rooms.doc();
     await ref.set({
@@ -458,22 +486,53 @@ class ChatRepository {
     return ref.id;
   }
 
-  /// Kanala abone olur.
-  Future<void> joinChannel(String roomId) async {
-    final uid = _requireUid();
-    await _rooms.doc(roomId).set({
-      'memberIds': FieldValue.arrayUnion([uid]),
-      'subscriberCount': FieldValue.increment(1),
-    }, SetOptions(merge: true));
+  /// Odanın varlığı + türü + üye listesi (tek okumayla).
+  ///
+  /// `subscriberCount` güvenlik kurallarında yalnızca kanallarda
+  /// değiştirilebilir; grup işlemlerinde bu alanın yazılmaması için
+  /// oda türünün önceden bilinmesi gerekir.
+  Future<({bool exists, bool isChannel, List<String> memberIds})>
+      _fetchRoomState(String roomId) async {
+    final doc = await _rooms.doc(roomId).get();
+    if (!doc.exists) {
+      return (exists: false, isChannel: false, memberIds: const <String>[]);
+    }
+    final data = doc.data() ?? const <String, dynamic>{};
+    return (
+      exists: true,
+      isChannel: data['type'] == RoomType.channel,
+      memberIds: (data['memberIds'] as List<dynamic>? ?? const [])
+          .whereType<String>()
+          .toList(),
+    );
   }
 
-  /// Kanaldan ayrılır.
+  /// Kanala abone olur. Zaten üyeyken tekrar çağrılırsa sayaç
+  /// artmaz ve işlem sessizce biter (çift dokunuş/yenileme güvenli).
+  /// (Sohbet ekranındaki "katıl" akışı gruplar için de bu yolu
+  /// kullanır; sayaç bu yüzden yalnız kanalda yazılır.)
+  Future<void> joinChannel(String roomId) async {
+    final uid = _requireUid();
+    final state = await _fetchRoomState(roomId);
+    if (!state.exists) {
+      throw const ChatException('Kanal bulunamadı.');
+    }
+    if (state.memberIds.contains(uid)) return;
+    await _rooms.doc(roomId).update({
+      'memberIds': FieldValue.arrayUnion([uid]),
+      if (state.isChannel) 'subscriberCount': FieldValue.increment(1),
+    });
+  }
+
+  /// Kanaldan ayrılır. Üye değilken çağrılırsa sayaç azalmaz.
   Future<void> leaveChannel(String roomId) async {
     final uid = _requireUid();
-    await _rooms.doc(roomId).set({
+    final state = await _fetchRoomState(roomId);
+    if (!state.memberIds.contains(uid)) return;
+    await _rooms.doc(roomId).update({
       'memberIds': FieldValue.arrayRemove([uid]),
-      'subscriberCount': FieldValue.increment(-1),
-    }, SetOptions(merge: true));
+      if (state.isChannel) 'subscriberCount': FieldValue.increment(-1),
+    });
   }
 
   // ---------------------------------------------------------------------------
@@ -492,6 +551,9 @@ class ChatRepository {
       final trimmed = name.trim();
       if (trimmed.length < 3) {
         throw const ChatException('Ad en az 3 karakter olmalı.');
+      }
+      if (trimmed.length > 80) {
+        throw const ChatException('Ad en fazla 80 karakter olabilir.');
       }
       data['name'] = trimmed;
     }
@@ -536,9 +598,9 @@ class ChatRepository {
     required bool value,
   }) async {
     _requireUid();
-    await _rooms.doc(roomId).set({
+    await _rooms.doc(roomId).update({
       'permissions.$key': value,
-    }, SetOptions(merge: true));
+    });
   }
 
   /// Üyeyi moderatör yapar ya da moderatörlüğünü kaldırır.
@@ -548,24 +610,38 @@ class ChatRepository {
     required bool moderator,
   }) async {
     _requireUid();
-    await _rooms.doc(roomId).set({
+    await _rooms.doc(roomId).update({
       'roles.$uid': moderator ? ChatRoom.roleModerator : ChatRoom.roleMember,
-    }, SetOptions(merge: true));
+    });
   }
 
   /// Üyeyi odadan çıkarır (mesajları silinmez).
+  ///
+  /// Hedef zaten üye değilse abone sayacı azaltılmaz; yalnızca
+  /// kalmış rol/ad kayıtları temizlenir. Sayaç yalnız kanalda yazılır.
   Future<void> removeMember(String roomId, String uid) async {
     _requireUid();
-    await _rooms.doc(roomId).set({
-      'memberIds': FieldValue.arrayRemove([uid]),
-      'subscriberCount': FieldValue.increment(-1),
+    final state = await _fetchRoomState(roomId);
+    if (!state.exists) return;
+
+    final data = <String, dynamic>{
       'roles.$uid': FieldValue.delete(),
       'memberNames.$uid': FieldValue.delete(),
       'memberPhotos.$uid': FieldValue.delete(),
-    }, SetOptions(merge: true));
+    };
+    if (state.memberIds.contains(uid)) {
+      data['memberIds'] = FieldValue.arrayRemove([uid]);
+      if (state.isChannel) {
+        data['subscriberCount'] = FieldValue.increment(-1);
+      }
+    }
+    await _rooms.doc(roomId).update(data);
   }
 
   /// Odaya üye ekler (profil bilgisi verilirse adı da yazılır).
+  ///
+  /// Kişi zaten üyeyse liste ve abone sayacı tekrar değişmez;
+  /// sayaç yalnız kanalda yazılır (kural gruplarda kabul etmez).
   Future<void> addMember(
     String roomId, {
     required String uid,
@@ -573,10 +649,18 @@ class ChatRepository {
     String photoUrl = '',
   }) async {
     _requireUid();
-    final data = <String, dynamic>{
-      'memberIds': FieldValue.arrayUnion([uid]),
-      'subscriberCount': FieldValue.increment(1),
-    };
+    final state = await _fetchRoomState(roomId);
+    if (!state.exists) {
+      throw const ChatException('Kanal/grup bulunamadı.');
+    }
+
+    final data = <String, dynamic>{};
+    if (!state.memberIds.contains(uid)) {
+      data['memberIds'] = FieldValue.arrayUnion([uid]);
+      if (state.isChannel) {
+        data['subscriberCount'] = FieldValue.increment(1);
+      }
+    }
     if (name.trim().isNotEmpty) data['memberNames.$uid'] = name.trim();
     if (photoUrl.trim().isNotEmpty) {
       // base64 avatarlar oda dokümanını şişirmesin.
@@ -584,28 +668,43 @@ class ChatRepository {
         data['memberPhotos.$uid'] = photoUrl.trim();
       }
     }
-    await _rooms.doc(roomId).set(data, SetOptions(merge: true));
+    if (data.isEmpty) return;
+    await _rooms.doc(roomId).update(data);
   }
 
   /// Kanalın/grupların sahipliğini devreder; eski sahip moderatör olur.
   Future<void> transferOwnership(String roomId, String newOwnerUid) async {
     final uid = _requireUid();
-    await _rooms.doc(roomId).set({
+    await _rooms.doc(roomId).update({
       'ownerUid': newOwnerUid,
       'roles.$newOwnerUid': FieldValue.delete(),
       'roles.$uid': ChatRoom.roleModerator,
-    }, SetOptions(merge: true));
+    });
   }
 
   /// Odadan ayrılır (sahip önce devretmeli — arayüz uyarır).
+  ///
+  /// Üye değilken çağrılırsa yalnızca liste görünümü temizlenir;
+  /// sayaç yalnız kanalda (ve gerçekten ayrılırken) azalır.
   Future<void> leaveRoom(String roomId) async {
     final uid = _requireUid();
-    await _rooms.doc(roomId).set({
+    final state = await _fetchRoomState(roomId);
+    if (!state.exists) return;
+
+    if (!state.memberIds.contains(uid)) {
+      await _rooms.doc(roomId).update({
+        'hiddenFor': FieldValue.arrayUnion([uid]),
+      });
+      return;
+    }
+
+    await _rooms.doc(roomId).update({
       'memberIds': FieldValue.arrayRemove([uid]),
-      'subscriberCount': FieldValue.increment(-1),
+      if (state.isChannel)
+        'subscriberCount': FieldValue.increment(-1),
       'hiddenFor': FieldValue.arrayUnion([uid]),
       'roles.$uid': FieldValue.delete(),
-    }, SetOptions(merge: true));
+    });
   }
 
   /// Bir üyenin oda içindeki profil bilgisi (ad/fotoğraf).
@@ -720,17 +819,20 @@ class ChatRepository {
 
     if (!members.contains(uid)) {
       final myName = (_auth.currentUser?.displayName ?? '').trim();
-      await _rooms.doc(roomId).set({
+      // Noktalı alan yolu için `update` şart. Abone sayacı yalnız
+      // kanalda yazılır; gruplarda bu alan dokümana eklenmez.
+      await _rooms.doc(roomId).update({
         'memberIds': FieldValue.arrayUnion([uid]),
-        'subscriberCount': FieldValue.increment(1),
+        if (data['type'] == RoomType.channel)
+          'subscriberCount': FieldValue.increment(1),
         'hiddenFor': FieldValue.arrayRemove([uid]),
         if (myName.isNotEmpty) 'memberNames.$uid': myName,
-      }, SetOptions(merge: true));
+      });
     } else {
       // Zaten üye: yalnızca listede görünmesini sağla.
-      await _rooms.doc(roomId).set({
+      await _rooms.doc(roomId).update({
         'hiddenFor': FieldValue.arrayRemove([uid]),
-      }, SetOptions(merge: true));
+      });
     }
 
     return roomId;
@@ -779,8 +881,23 @@ class ChatRepository {
   }
 
   Future<void> deleteChat(String roomId) async {
-    _requireUid();
+    final uid = _requireUid();
     final roomRef = _rooms.doc(roomId);
+
+    // DM'i iki taraf da silebilir; grup/kanalı yalnızca sahibi.
+    // Yetkisiz denemede mesajlar yarıda hata verene kadar silinmek
+    // yerine en başta anlaşılır mesaj döner.
+    final roomDoc = await roomRef.get();
+    if (roomDoc.exists) {
+      final room = ChatRoom.fromDoc(roomDoc, viewerUid: uid);
+      if (!room.isDirect && !room.sahipMi(uid)) {
+        throw ChatException(
+          room.isChannel
+              ? 'Kanalı yalnızca sahibi silebilir.'
+              : 'Grubu yalnızca sahibi silebilir.',
+        );
+      }
+    }
 
     while (true) {
       final snapshot = await roomRef.collection('messages').limit(300).get();

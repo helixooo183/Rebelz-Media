@@ -269,7 +269,6 @@ class AuthService {
     final data = <String, dynamic>{
       'displayName': resolvedName,
       'displayNameLower': resolvedName.toLowerCase(),
-      'email': user.email ?? '',
       'emailVerified': user.emailVerified,
       'lastSeenAt': FieldValue.serverTimestamp(),
     };
@@ -283,9 +282,14 @@ class AuthService {
     );
     if (photo != null) data['photoUrl'] = photo;
 
-    // `createdAt` yalnızca ilk kayıtta yazılır (güvenlik kuralı, güncellemede
-    // bu alanın değişmesine izin vermez ve tarih korunur).
-    if (isNew) data['createdAt'] = FieldValue.serverTimestamp();
+    // `createdAt` ve `email` yalnızca ilk kayıtta yazılır: güvenlik
+    // kuralı `users` güncellemesinde bu iki alanın değişmesine izin
+    // vermez. Her girişte yeniden yazmak, kayıttaki e-posta farklı/eksik
+    // olduğunda tüm yazımın `permission-denied` almasına yol açıyordu.
+    if (isNew) {
+      data['createdAt'] = FieldValue.serverTimestamp();
+      data['email'] = user.email ?? '';
+    }
 
     await docRef.set(data, SetOptions(merge: true));
   }

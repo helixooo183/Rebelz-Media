@@ -9,11 +9,11 @@ String friendlyFirestoreError(Object error) {
   if (error is FirebaseException) {
     switch (error.code) {
       case 'permission-denied':
-        return 'Yetki hatası: Firestore kuralları güncel değil olabilir. '
-            'Yönetici "firebase deploy --only firestore:rules" çalıştırmalı.';
+        return 'Bu işlemi yapma yetkin yok (ya da oturumun yenilenmesi '
+            'gerekiyor). Çıkış yapıp tekrar girmeyi dene; sorun sürerse '
+            'destek talebi oluştur.';
       case 'failed-precondition':
-        return 'Firestore koşul hatası (indeks gerekebilir): '
-            '${error.message ?? error.code}';
+        return 'İşlem şu an tamamlanamıyor. Biraz bekleyip tekrar dene.';
       case 'unavailable':
         return 'Bağlantı kurulamadı. İnterneti kontrol edip tekrar dene.';
       case 'not-found':

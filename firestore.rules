@@ -165,11 +165,17 @@ service cloud.firestore {
         return room().type == 'channel';
       }
 
-      // Kanal sahibi mi? (kanal dışındaki sohbetlerde iki taraf da eşittir.)
       // Kanal/grup sahibi mi?
+      //
+      // Uygulama tarafındaki `ChatRoom.sahip` ile aynı karar: `ownerUid`
+      // alanı hiç yoksa **ve boş string ise** oluşturan sahip sayılır.
+      // (Eski hâli boş stringi geçerli bir uid sanıp, uygulama sahibi
+      // yönetici sayarken yazmayı reddediyordu.)
       function isRoomOwner() {
-        return room().get('ownerUid', room().get('createdBy', '')) ==
-               request.auth.uid;
+        return (room().get('ownerUid', '') != ''
+                && room().get('ownerUid', '') == request.auth.uid)
+            || (room().get('ownerUid', '') == ''
+                && room().get('createdBy', '') == request.auth.uid);
       }
 
       function isRoomMod() {
@@ -180,6 +186,11 @@ service cloud.firestore {
       // kapatılırsa tüm aboneler yazabilir.
       function onlyModsPost() {
         return room().get('permissions', {}).get('onlyModsPost', true);
+      }
+
+      // Yalnızca moderatörler yeni üye ekleyebilsin (varsayılan: hayır).
+      function onlyModsAddMembers() {
+        return room().get('permissions', {}).get('onlyModsAddMembers', false);
       }
 
       function canWriteContent() {
@@ -238,13 +249,27 @@ service cloud.firestore {
       // ister) katılma isteği PERMISSION_DENIED alıyordu. Bu blok yalnızca
       // "kendini ekle/çıkar" işlemine izin verir:
       //   * yalnızca `memberIds`, `subscriberCount`, `hiddenFor`, `memberNames`
-      //     alanları değişebilir,
+      //     alanları değişebilir (ayrılırken kendi `roles` kaydı da
+      //     temizlenebilir — aşağıdaki koşula bakın),
       //   * kullanıcı yalnızca KENDİ uid'sini ekleyip çıkarabilir
       //     (başkasını ekleme/çıkarma yine aşağıdaki yönetim kuralına tabidir).
+      //
+      // `roles` istisnası olmasaydı, rol kaydı ('member'/'mod') taşıyan
+      // sıradan bir kanal abonesi ayrılamazdı: yazımı hem bu bloğun alan
+      // listesine hem de aşağıdaki bloğun `canWriteContent()` kapısına
+      // takılıyordu.
       allow update: if signedIn()
         && request.resource.data.diff(resource.data).affectedKeys()
              .hasOnly(['memberIds', 'subscriberCount', 'hiddenFor',
-                       'memberNames'])
+                       'memberNames', 'roles'])
+        && (!('roles' in request.resource.data.diff(resource.data)
+                .affectedKeys())
+            || (!(request.auth.uid in request.resource.data.memberIds)
+                && request.resource.data.get('roles', {})
+                     .diff(resource.data.get('roles', {}))
+                     .affectedKeys().hasOnly([request.auth.uid])
+                && !(request.auth.uid
+                     in request.resource.data.get('roles', {}).keys())))
         && (
              // katılma: uid eklendi, başka kimse eklenmedi
              (!(request.auth.uid in resource.data.memberIds)
@@ -287,11 +312,30 @@ service cloud.firestore {
                       .hasAll(resource.data.memberIds)
                     || !(request.auth.uid in request.resource.data.memberIds)
                     || isRoomOwner() || isRoomMod())))
+        // `onlyModsAddMembers` açıksa üye listesini **büyütmek** yalnızca
+        // sahip/moderatöründür. (Kendi kendine katılma üstteki katılma
+        // bloğundan geçer; burası üyenin başkalarını eklemesini düzenler.)
+        && (!('memberIds' in request.resource.data.diff(resource.data)
+                .affectedKeys())
+            || request.resource.data.memberIds.size()
+                 <= resource.data.memberIds.size()
+            || !onlyModsAddMembers()
+            || isRoomOwner() || isRoomMod())
         // Rol/izin/sahiplik değişiklikleri yalnızca yönetime açıktır ve
         // sahiplik yalnızca mevcut sahip tarafından devredilebilir.
+        // Tek istisna: ayrılan üye kendi rol kaydını da temizleyebilir
+        // (yalnızca kendi anahtarı, yalnızca kaldırma, üyelikten çıkarken)
+        // — aksi hâlde rol kaydı ('member') olan sıradan üye ayrılamazdı.
         && (!('roles' in request.resource.data.diff(resource.data)
                 .affectedKeys())
-            || isRoomOwner() || isRoomMod())
+            || isRoomOwner() || isRoomMod()
+            || (request.auth.uid in resource.data.memberIds
+                && !(request.auth.uid in request.resource.data.memberIds)
+                && request.resource.data.get('roles', {})
+                     .diff(resource.data.get('roles', {}))
+                     .affectedKeys().hasOnly([request.auth.uid])
+                && !(request.auth.uid
+                     in request.resource.data.get('roles', {}).keys())))
         && (!('permissions' in request.resource.data.diff(resource.data)
                 .affectedKeys())
             || isRoomOwner() || isRoomMod())
@@ -317,8 +361,12 @@ service cloud.firestore {
             || (resource.data.type == 'group'
                 && resource.data.createdBy == request.auth.uid)
             || ((resource.data.type == 'channel' || resource.data.type == 'group')
-                && resource.data.get('ownerUid',
-                     resource.data.get('createdBy', '')) == request.auth.uid));
+                && ((resource.data.get('ownerUid', '') != ''
+                     && resource.data.get('ownerUid', '')
+                          == request.auth.uid)
+                    || (resource.data.get('ownerUid', '') == ''
+                        && resource.data.get('createdBy', '')
+                             == request.auth.uid))));
 
       // ------------------------------------------------------------- mesajlar
       match /messages/{messageId} {
@@ -372,12 +420,17 @@ service cloud.firestore {
 
         // Sohbeti silme akışı için üyeler mesajları kaldırabilir.
         // Kanal/gruplarda moderatörler yalnızca izin verildiyse silebilir.
+        // DM'de iki taraf da tüm sohbeti silebilir ("sohbeti tamamen sil"
+        // akışı karşı tarafın mesajlarını da kaldırır; aksi hâlde silme
+        // yalnızca sohbeti ilk açan tarafta çalışıyordu).
         allow delete: if signedIn()
           && (resource.data.senderId == request.auth.uid
               || (room().get('permissions', {})
                       .get('modsDeleteMessages', false) == true
                   && (isRoomOwner() || isRoomMod()))
-              || isRoomOwner());
+              || isRoomOwner()
+              || (room().get('type', '') == 'dm'
+                  && request.auth.uid in room().memberIds));
       }
     }
 
@@ -393,23 +446,44 @@ service cloud.firestore {
     // Davet bağlantıları: oluşturan yazar/iptal eder, giriş yapan herkes
     // kodu okuyabilir (katılmak için gereken tek bilgi kodun kendisidir).
     match /room_invites/{code} {
+      // Davetin işaret ettiği oda (oluşturmada istekten, silmede kayıttan).
+      function newTargetRoom() {
+        return get(/databases/$(database)/documents/rooms/$(request.resource.data.roomId)).data;
+      }
+
+      function existingTargetRoom() {
+        return get(/databases/$(database)/documents/rooms/$(resource.data.roomId)).data;
+      }
+
+      // Verilen oda verisinde oturumdaki kullanıcı yönetici mi?
+      // Sahiplikte `ownerUid` boş/yok ise `createdBy` geçerlidir.
+      function isTargetRoomManager(roomData) {
+        return (roomData.get('ownerUid', '') != ''
+                && roomData.get('ownerUid', '') == request.auth.uid)
+            || (roomData.get('ownerUid', '') == ''
+                && roomData.get('createdBy', '') == request.auth.uid)
+            || roomData.get('roles', {}).get(request.auth.uid, '') == 'mod';
+      }
+
       allow get: if signedIn();
       // Liste yalnızca KENDİ oluşturduğun davetler: sorgu
       // `where('createdBy', '==', uid)` içerdiği için kanıtlanabilir.
       // Böylece kimse tüm davet kodlarını toplayamaz.
       allow list: if signedIn()
         && resource.data.createdBy == request.auth.uid;
+      // Davet yalnızca o kanal/grubu yönetenler üretebilir; eskiden giriş
+      // yapan herkes herhangi bir oda için davet kodu oluşturabiliyordu.
       allow create: if signedIn()
         && request.resource.data.createdBy == request.auth.uid
         && isNonEmptyString(request.resource.data.roomId, 128)
+        && isTargetRoomManager(newTargetRoom())
         && request.resource.data.keys().hasOnly([
              'roomId', 'createdBy', 'roomName', 'roomType', 'createdAt',
            ]);
       allow update: if false;
       allow delete: if signedIn()
         && (resource.data.createdBy == request.auth.uid
-            || get(/databases/$(database)/documents/rooms/$(resource.data.roomId))
-                 .data.get('ownerUid', '') == request.auth.uid);
+            || isTargetRoomManager(existingTargetRoom()));
     }
 
     // ---------------------------------------------------------------- reports
@@ -458,7 +532,11 @@ service cloud.firestore {
       // Sahibi kendi talebini, yönetici tümünü okur.
       allow get: if signedIn()
         && (resource.data.uid == request.auth.uid || isAdmin());
-      allow list: if isAdmin();
+      // "Taleplerim" ekranı `where('uid', '==', uid)` liste sorgusu
+      // yapar — `get` izni bunu kapsamaz. Liste de aynı koşulla açılır;
+      // sorgudaki eşitlik filtresi kuralı kanıtlanabilir yapar.
+      allow list: if signedIn()
+        && (resource.data.uid == request.auth.uid || isAdmin());
 
       // Yönetici yanıtı: yalnızca yanıt alanları + durum yazılabilir.
       allow update: if isAdmin()

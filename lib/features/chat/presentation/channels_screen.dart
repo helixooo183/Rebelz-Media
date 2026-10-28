@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../core/router/app_router.dart';
+import '../../../core/services/firestore_errors.dart';
 import '../../../core/services/services.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/widgets/app_card.dart';
@@ -105,7 +106,7 @@ class _ChannelsScreenState extends State<ChannelsScreen> {
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('$e')),
+        SnackBar(content: Text(friendlyFirestoreError(e))),
       );
     } finally {
       if (mounted) setState(() => _isBusy = false);
@@ -154,7 +155,7 @@ class _ChannelsScreenState extends State<ChannelsScreen> {
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Ayrılınamadı: $e')),
+        SnackBar(content: Text('Ayrılınamadı: ${friendlyFirestoreError(e)}')),
       );
     }
   }
@@ -269,7 +270,7 @@ class _ChannelsScreenState extends State<ChannelsScreen> {
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Kanal açılamadı: $e')),
+        SnackBar(content: Text('Kanal açılamadı: ${friendlyFirestoreError(e)}')),
       );
     } finally {
       if (mounted) setState(() => _isBusy = false);
@@ -341,7 +342,7 @@ class _ChannelsScreenState extends State<ChannelsScreen> {
                     return EmptyState(
                       icon: Icons.cloud_off_rounded,
                       title: 'Kanallar yüklenemedi',
-                      message: '${snapshot.error}',
+                      message: friendlyFirestoreError(snapshot.error!),
                     );
                   }
                   if (!snapshot.hasData) {
@@ -391,7 +392,7 @@ class _ChannelsScreenState extends State<ChannelsScreen> {
                     separatorBuilder: (_, _) => const SizedBox(height: 8),
                     itemBuilder: (context, index) {
                       final channel = channels[index];
-                      final isMine = channel.ownerUid == _myUid;
+                      final isMine = channel.sahipMi(_myUid);
                       final isMember = channel.hasMember(_myUid);
 
                       return AppCard(

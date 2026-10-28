@@ -1,0 +1,73 @@
+name: Firestore Rules · main
+
+# `firestore.rules` dosyasını Firebase'e (proje: rebelz-media) yayınlar.
+#
+# Gereken tek şey: depoya FIREBASE_TOKEN secret'ı eklenmesi.
+#   firebase login:ci   → çıkan token
+#   GitHub → Settings → Secrets and variables → Actions → New repository secret
+#   Name: FIREBASE_TOKEN   Value: <token>
+#
+# Secret yoksa iş FAIL olur (sessizce geçmez), böylece yayınlanmadığı
+# fark edilir. Kurallar geçmişte elle konsola yapıştırıldığı için
+# "kurallar güncel mi?" belirsizliği yaşanmıştı; bu iş akışı repo'daki
+# dosyayı tek doğru kaynak yapar.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'firestore.rules'
+      - 'firebase.json'
+      - '.firebaserc'
+      - '.github/workflows/firestore-rules.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: firestore-rules-main
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Dosyaları kontrol et
+        run: |
+          set -e
+          test -f firebase.json || { echo "::error::firebase.json yok"; exit 1; }
+          test -f firestore.rules || { echo "::error::firestore.rules yok"; exit 1; }
+          echo "firebase.json firestore.rules: $(python3 -c "import json;print(json.load(open('firebase.json'))['firestore']['rules'])")"
+          echo "firestore.rules satır sayısı: $(wc -l < firestore.rules)"
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: firebase-tools kur
+        run: npm install --global firebase-tools@13
+
+      - name: Kuralları yayınla
+        env:
+          FIREBASE_TOKEN: ${{ secrets.FIREBASE_TOKEN }}
+        run: |
+          set -e
+          if [ -z "$FIREBASE_TOKEN" ]; then
+            echo "::error::FIREBASE_TOKEN secret tanımlı değil. Yerelde 'firebase login:ci' çalıştırıp çıkan token'ı repoya secret olarak ekleyin (Settings → Secrets → Actions)."
+            exit 1
+          fi
+          firebase deploy \
+            --only firestore:rules \
+            --project rebelz-media \
+            --token "$FIREBASE_TOKEN" \
+            --non-interactive
+
+      - name: Özet
+        run: |
+          {
+            echo "### Firestore kuralları yayınlandı ✅"
+            echo ""
+            echo "- Proje: rebelz-media"
+            echo "- Kaynak: \`firestore.rules\` (firebase.json → firestore.rules)"
+            echo "- Konsol: https://console.firebase.google.com/project/rebelz-media/firestore/rules"
+          } >> "$GITHUB_STEP_SUMMARY"

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../../core/services/firestore_errors.dart';
 import '../../../core/services/services.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/widgets/empty_state.dart';
@@ -40,7 +41,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Güncellenemedi: $e')),
+        SnackBar(content: Text('Güncellenemedi: ${friendlyFirestoreError(e)}')),
       );
     } finally {
       if (mounted) setState(() => _isBusy = false);
@@ -78,7 +79,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
             return EmptyState(
               icon: Icons.cloud_off_rounded,
               title: 'Şikayetler yüklenemedi',
-              message: '${snapshot.error}',
+              message: friendlyFirestoreError(snapshot.error!),
             );
           }
           if (!snapshot.hasData) {

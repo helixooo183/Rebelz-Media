@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../../core/services/firestore_errors.dart';
 import '../../../core/services/services.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/widgets/primary_button.dart';
@@ -78,7 +79,7 @@ class _JoinInviteScreenState extends State<JoinInviteScreen> {
     } on ChatException catch (e) {
       if (mounted) setState(() => _error = e.message);
     } catch (e) {
-      if (mounted) setState(() => _error = 'Katılınamadı: $e');
+      if (mounted) setState(() => _error = 'Katılınamadı: ${friendlyFirestoreError(e)}');
     } finally {
       if (mounted) setState(() => _isJoining = false);
     }

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../../core/services/firestore_errors.dart';
 import '../../../core/services/media_service.dart';
 import '../../../core/services/services.dart';
 import '../../../core/theme/app_colors.dart';
@@ -106,7 +107,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
       setState(() => _photo = dataUri);
     } catch (e) {
       if (mounted) {
-        setState(() => _error = 'Fotoğraf seçilemedi: $e');
+        setState(() => _error = 'Fotoğraf seçilemedi: ${friendlyFirestoreError(e)}');
       }
     } finally {
       if (mounted) setState(() => _isPickingPhoto = false);
@@ -143,7 +144,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     } on ProfileException catch (e) {
       setState(() => _error = e.message);
     } catch (e) {
-      setState(() => _error = 'Profil kaydedilemedi: $e');
+      setState(() => _error = 'Profil kaydedilemedi: ${friendlyFirestoreError(e)}');
     } finally {
       if (mounted) setState(() => _isSaving = false);
     }

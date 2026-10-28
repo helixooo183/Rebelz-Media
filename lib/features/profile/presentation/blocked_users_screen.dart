@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../../core/services/firestore_errors.dart';
 import '../../../core/services/services.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/widgets/app_card.dart';
@@ -42,7 +43,7 @@ class _BlockedUsersScreenState extends State<BlockedUsersScreen> {
       setState(() => _profiles = profiles);
     } catch (e) {
       if (!mounted) return;
-      setState(() => _error = 'Liste yüklenemedi: $e');
+      setState(() => _error = 'Liste yüklenemedi: ${friendlyFirestoreError(e)}');
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
@@ -61,7 +62,7 @@ class _BlockedUsersScreenState extends State<BlockedUsersScreen> {
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Engel kaldırılamadı: $e')),
+        SnackBar(content: Text('Engel kaldırılamadı: ${friendlyFirestoreError(e)}')),
       );
     }
   }
