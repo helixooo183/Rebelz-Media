@@ -366,6 +366,10 @@ flutter test test_preview/preview_test.dart --update-goldens   # docs/screens.pn
 - [x] **Mesaj silme** (benden sil / herkesten sil) + fotoğrafta tam ekran görüntüleme + 5 saniyelik **geri al** bildirimi
 - [x] **Kanala katıl / ayrıl / kanalı sil** (sahip) · **https davet bağlantısı** (`/katil/?k=KOD`)
 - [x] **Destek taleplerini yönetici yanıtlar** (Destek talepleri paneli)
+- [x] **Davet bağlantısı doğrudan sohbeti açar**: `rebelzmedia://katil/KOD`
+      (GoRouter'da yakalayıcı rota + `auto=1` → otomatik katılma)
+- [x] Davet sayfasında **Google Play** butonu (yayına girince
+      `docs/katil/index.html` içindeki `PLAY_STORE_URL` doldurulacak)
 - [ ] Mesaj sayfalama (şu an son 200 mesaj), FCM bildirimleri
 
 ---
@@ -375,6 +379,12 @@ flutter test test_preview/preview_test.dart --update-goldens   # docs/screens.pn
 - Yayınlanan klasör: **`docs/`** (`firebase.json` → `hosting.public`)
 - Adres: `https://rebelz-media.web.app`
 - Davet linki: `https://rebelz-media.web.app/katil/?k=KOD`
+- Sayfa, uygulama yüklüyse `intent://` ile uygulamayı açar (uygulama yoksa
+  `S.browser_fallback_url` ile aynı sayfaya döner, döngü olmaması için
+  `?inapp=1` kontrol edilir) ve **Google Play** indirme seçeneğini gösterir.
+- Play Store yayını açılınca: `docs/katil/index.html` ve `docs/index.html`
+  içindeki `PLAY_STORE_URL` değişkenine mağaza adresi yazılır (başka yerde
+  değişiklik gerekmez).
 
 Yerelden yayın:
 ```bash

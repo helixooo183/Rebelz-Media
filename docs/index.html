@@ -41,6 +41,31 @@
       border: 1px solid var(--line); font-weight: 600;
     }
     .hint { color: var(--muted); font-size: 12px; line-height: 1.6; margin-top: 18px; }
+    .play-btn {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      width: 100%;
+      margin-top: 10px;
+      padding: 12px 16px;
+      border-radius: 14px;
+      text-decoration: none;
+      background: #111113;
+      border: 1px solid var(--line);
+      color: var(--text);
+      font-weight: 700;
+      font-size: 14.5px;
+    }
+    .play-btn svg { width: 20px; height: 20px; }
+    .play-btn small {
+      display: block;
+      font-weight: 500;
+      font-size: 10.5px;
+      color: var(--muted);
+      letter-spacing: 0.02em;
+    }
+    .play-btn.is-disabled { opacity: 0.55; cursor: default; }
     .hint code {
       font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
       color: var(--text); background: #111113; padding: 2px 6px; border-radius: 6px;
@@ -61,10 +86,36 @@
     <a class="btn" href="rebelzmedia://katil/">Uygulamayı aç</a>
     <a class="btn ghost" href="katil/">Davet sayfası</a>
 
+    <a class="play-btn is-disabled" id="play" href="#" rel="noopener">
+      <svg viewBox="0 0 512 512" aria-hidden="true">
+        <path fill="#00D2FF" d="M47 32l217 224L47 480c-9-6-14-16-14-28V60c0-12 5-22 14-28z"/>
+        <path fill="#00F076" d="M47 32c8-6 19-7 29-1l246 141-97 100L47 32z"/>
+        <path fill="#FF3A44" d="M47 480c8 6 19 7 29 1l246-141-97-100L47 480z"/>
+        <path fill="#FFC900" d="M322 172l69 40c20 11 20 37 0 48l-69 40-99-64 99-64z"/>
+      </svg>
+      <span>
+        Google Play'den indir
+        <small id="playNote">Yakında Play Store'da</small>
+      </span>
+    </a>
+
     <p class="hint">
       Davet kodu örneği: <code>9H2RC4AQ</code><br />
       Uygulamada: <b>Kanallar → Kod ile katıl</b>
     </p>
   </main>
+
+  <script>
+    // Uygulama Play Store'a çıkınca bu adresi doldur.
+    var PLAY_STORE_URL = '';
+    var play = document.getElementById('play');
+    if (PLAY_STORE_URL) {
+      play.href = PLAY_STORE_URL;
+      play.classList.remove('is-disabled');
+      document.getElementById('playNote').textContent = 'Ücretsiz indir';
+    } else {
+      play.addEventListener('click', function (event) { event.preventDefault(); });
+    }
+  </script>
 </body>
 </html>
