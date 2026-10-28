@@ -1,0 +1,74 @@
+name: Hosting · main
+
+# `docs/` klasörünü Firebase Hosting'e (proje: rebelz-media) yayınlar.
+#
+# firebase.json → hosting.public = "docs"
+# Yayın adresi: https://rebelz-media.web.app
+# Davet sayfası: https://rebelz-media.web.app/katil/?k=KOD
+#
+# Gereken tek şey: depoya FIREBASE_TOKEN secret'ı eklenmesi.
+#   firebase login:ci   → çıkan token
+#   GitHub → Settings → Secrets and variables → Actions → New repository secret
+#   Name: FIREBASE_TOKEN   Value: <token>
+#
+# Secret yoksa iş FAIL olur (sessizce geçmez), böylece yayınlanmadığı fark edilir.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'docs/**'
+      - 'firebase.json'
+      - '.firebaserc'
+      - '.github/workflows/hosting.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: hosting-main
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Dosyaları kontrol et
+        run: |
+          set -e
+          test -f firebase.json || { echo "::error::firebase.json yok"; exit 1; }
+          test -f docs/katil/index.html || { echo "::error::docs/katil/index.html yok"; exit 1; }
+          echo "Yayınlanacak: $(find docs -type f | wc -l) dosya"
+          echo "firebase.json hosting.public: $(python3 -c "import json;print(json.load(open('firebase.json'))['hosting']['public'])")"
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: firebase-tools kur
+        run: npm install --global firebase-tools@13
+
+      - name: Hosting'e yayınla
+        env:
+          FIREBASE_TOKEN: ${{ secrets.FIREBASE_TOKEN }}
+        run: |
+          set -e
+          if [ -z "$FIREBASE_TOKEN" ]; then
+            echo "::error::FIREBASE_TOKEN secret tanımlı değil. Yerelde 'firebase login:ci' çalıştırıp çıkan token'ı repoya secret olarak ekleyin (Settings → Secrets → Actions)."
+            exit 1
+          fi
+          firebase deploy \
+            --only hosting \
+            --project rebelz-media \
+            --token "$FIREBASE_TOKEN" \
+            --non-interactive
+
+      - name: Özet
+        run: |
+          {
+            echo "### Hosting yayınlandı ✅"
+            echo ""
+            echo "- Site: https://rebelz-media.web.app"
+            echo "- Davet: https://rebelz-media.web.app/katil/?k=KOD"
+            echo "- Kaynak: \`docs/\` (firebase.json → hosting.public)"
+          } >> "$GITHUB_STEP_SUMMARY"

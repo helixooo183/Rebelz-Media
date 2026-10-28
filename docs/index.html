@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>Rebelz Media</title>
+  <meta name="description" content="Rebelz Media — kanallar, gruplar ve kişiler arası sohbet." />
+  <meta property="og:title" content="Rebelz Media" />
+  <meta property="og:description" content="Kanallar, gruplar ve kişiler arası sohbet." />
+  <style>
+    :root {
+      --bg: #0a0a0a; --card: #141416; --line: #2a2a2e;
+      --text: #f7f7f8; --muted: #9b9ba4; --brand: #ff2d2d; --brand-2: #d6102e;
+    }
+    * { box-sizing: border-box; }
+    html, body {
+      margin: 0; min-height: 100%; background: var(--bg); color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+        "Helvetica Neue", Arial, sans-serif;
+    }
+    body { display: flex; align-items: center; justify-content: center; padding: 24px; }
+    .card {
+      width: 100%; max-width: 420px; background: var(--card);
+      border: 1px solid var(--line); border-radius: 22px;
+      padding: 30px 22px 26px; text-align: center;
+    }
+    .logo { font-size: 28px; font-weight: 800; letter-spacing: 0.02em; }
+    .logo .r { color: var(--brand); }
+    .tag { color: var(--muted); font-size: 13px; margin-top: 6px; }
+    .title { font-size: 20px; font-weight: 800; margin: 24px 0 10px; }
+    .desc { color: var(--muted); font-size: 14px; line-height: 1.55; margin: 0 0 22px; }
+    .btn {
+      display: block; width: 100%; padding: 15px 18px; border-radius: 14px;
+      font-size: 16px; font-weight: 700; text-decoration: none; color: #fff;
+      background: linear-gradient(135deg, var(--brand), var(--brand-2));
+      border: 0; cursor: pointer;
+    }
+    .btn:active { transform: translateY(1px); }
+    .btn.ghost {
+      margin-top: 10px; background: transparent; color: var(--text);
+      border: 1px solid var(--line); font-weight: 600;
+    }
+    .hint { color: var(--muted); font-size: 12px; line-height: 1.6; margin-top: 18px; }
+    .hint code {
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      color: var(--text); background: #111113; padding: 2px 6px; border-radius: 6px;
+    }
+  </style>
+</head>
+<body>
+  <main class="card">
+    <div class="logo"><span class="r">R</span>EBELZ MEDIA</div>
+    <div class="tag">Kanallar · Gruplar · Kişiler arası sohbet</div>
+
+    <h1 class="title">Rebelz Media</h1>
+    <p class="desc">
+      Bu adres davet bağlantılarının açıldığı yerdir. Elinde bir davet
+      bağlantısı varsa onu aç; yoksa uygulamayı başlatıp kod ile katıl.
+    </p>
+
+    <a class="btn" href="rebelzmedia://katil/">Uygulamayı aç</a>
+    <a class="btn ghost" href="katil/">Davet sayfası</a>
+
+    <p class="hint">
+      Davet kodu örneği: <code>9H2RC4AQ</code><br />
+      Uygulamada: <b>Kanallar → Kod ile katıl</b>
+    </p>
+  </main>
+</body>
+</html>
