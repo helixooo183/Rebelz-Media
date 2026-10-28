@@ -336,6 +336,20 @@ service cloud.firestore {
                      .affectedKeys().hasOnly([request.auth.uid])
                 && !(request.auth.uid
                      in request.resource.data.get('roles', {}).keys())))
+        // Rol yalnızca üye listesindeki birine verilebilir ya da onun
+        // rolü değiştirilebilir; kanal dışında biri moderatör yapılamaz.
+        // Rol kaydını SİLMEK (ayrılma/üye çıkarma temizliği) serbesttir:
+        // bu yüzden yalnızca eklenen + değişen anahtarlar sınırlanır.
+        && (!('roles' in request.resource.data.diff(resource.data)
+                .affectedKeys())
+            || (request.resource.data.get('roles', {})
+                  .diff(resource.data.get('roles', {}))
+                  .addedKeys()
+                  .hasOnly(request.resource.data.memberIds)
+                && request.resource.data.get('roles', {})
+                     .diff(resource.data.get('roles', {}))
+                     .changedKeys()
+                     .hasOnly(request.resource.data.memberIds)))
         && (!('permissions' in request.resource.data.diff(resource.data)
                 .affectedKeys())
             || isRoomOwner() || isRoomMod())

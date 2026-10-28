@@ -253,8 +253,13 @@ class _FakeUserRepository implements UserRepository {
   Stream<UserProfile?> watchMyProfile() => Stream.value(me);
 
   @override
-  Future<UserProfile?> fetchProfile(String uid) async =>
-      uid == me.uid ? me : null;
+  Future<UserProfile?> fetchProfile(String uid) async {
+    if (uid == me.uid) return me;
+    for (final profile in directory) {
+      if (profile.uid == uid) return profile;
+    }
+    return null;
+  }
 
   @override
   Future<List<UserProfile>> searchUsers(

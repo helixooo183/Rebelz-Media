@@ -58,6 +58,55 @@ class _RoomsScreenState extends State<RoomsScreen> {
   String _filter = 'all';
   bool _isAcceptingTerms = false;
 
+  /// DM karşı taraf profilleri (liste satırındaki canlı avatar/ad için).
+  ///
+  /// Oda dokümanındaki `memberPhotos` kopyası eksik/bayat olabiliyor
+  /// (galeri avatarları oraya yazılmaz); birincil kaynak canlı profil.
+  final Map<String, UserProfile> _peerProfiles = {};
+  final Set<String> _requestedPeers = {};
+
+  Future<void> _loadPeerProfiles(Iterable<String> uids) async {
+    final users = _users;
+    if (users == null) return;
+    final missing = uids
+        .where((id) =>
+            id.isNotEmpty &&
+            id != _myUid &&
+            !_peerProfiles.containsKey(id) &&
+            !_requestedPeers.contains(id))
+        .toList();
+    if (missing.isEmpty) return;
+    _requestedPeers.addAll(missing);
+    try {
+      final fetched = await Future.wait(missing.map(users.fetchProfile));
+      if (!mounted) return;
+      setState(() {
+        for (var i = 0; i < missing.length; i++) {
+          final profile = fetched[i];
+          if (profile != null) _peerProfiles[missing[i]] = profile;
+        }
+      });
+    } catch (_) {
+      // Profil okunamazsa satırlar oda kaydındaki fotoğrapla kalır.
+    }
+  }
+
+  void _ensurePeerProfiles(List<ChatRoom> rooms) {
+    final peers = <String>{
+      for (final room in rooms)
+        if (room.isDirect) room.peerUid(_myUid) ?? '',
+    };
+    final hasMissing = peers.any((id) =>
+        id.isNotEmpty &&
+        id != _myUid &&
+        !_peerProfiles.containsKey(id) &&
+        !_requestedPeers.contains(id));
+    if (!hasMissing) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _loadPeerProfiles(peers);
+    });
+  }
+
   UserRepository? _resolveUsers() {
     if (widget.userRepository != null) return widget.userRepository;
     try {
@@ -368,6 +417,7 @@ class _RoomsScreenState extends State<RoomsScreen> {
                         if (_filter == 'group') return room.isGroup;
                         return true;
                       }).toList();
+                      _ensurePeerProfiles(snapshot.data!);
 
                       if (rooms.isEmpty) {
                         return EmptyState(
@@ -390,6 +440,9 @@ class _RoomsScreenState extends State<RoomsScreen> {
                           return _RoomTile(
                             room: room,
                             myUid: _myUid,
+                            peerProfile: room.isDirect
+                                ? _peerProfiles[room.peerUid(_myUid) ?? '']
+                                : null,
                             onTap: () => _openChat(room),
                             onLongPress: () => _deleteChat(room),
                           );
@@ -654,6 +707,7 @@ class _RoomTile extends StatelessWidget {
     required this.myUid,
     required this.onTap,
     required this.onLongPress,
+    this.peerProfile,
   });
 
   final ChatRoom room;
@@ -661,10 +715,19 @@ class _RoomTile extends StatelessWidget {
   final VoidCallback onTap;
   final VoidCallback onLongPress;
 
+  /// DM karşı tarafının canlı profili (ad/fotoğraf önce buradan).
+  final UserProfile? peerProfile;
+
   @override
   Widget build(BuildContext context) {
-    final name = room.isDirect ? room.peerName(myUid) : room.name;
-    final photo = room.isDirect ? room.peerPhoto(myUid) : room.photoUrl;
+    final liveName = peerProfile?.displayName.trim() ?? '';
+    final name = room.isDirect
+        ? (liveName.isNotEmpty ? liveName : room.peerName(myUid))
+        : room.name;
+    final livePhoto = peerProfile?.photoUrl.trim() ?? '';
+    final photo = room.isDirect
+        ? (livePhoto.isNotEmpty ? livePhoto : room.peerPhoto(myUid))
+        : room.photoUrl;
     final isMineLast = room.lastSenderId == myUid;
     final typing = room.isPeerTyping(myUid);
     final unread = !isMineLast && room.lastSenderId.isNotEmpty;
@@ -680,8 +743,9 @@ class _RoomTile extends StatelessWidget {
             name: name,
             size: 50,
             photoUrl: photo,
+            emoji: peerProfile?.avatarEmoji ?? '',
             isGroup: room.isGroup,
-            colorIndex: _colorIndexFor(name),
+            colorIndex: peerProfile?.avatarColor ?? _colorIndexFor(name),
           ),
           const SizedBox(width: 13),
           Expanded(
