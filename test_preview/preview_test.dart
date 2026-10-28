@@ -29,6 +29,7 @@ import 'package:sohbet/features/chat/presentation/chat_screen.dart';
 import 'package:sohbet/features/chat/presentation/join_invite_screen.dart';
 import 'package:sohbet/features/chat/presentation/new_chat_sheet.dart';
 import 'package:sohbet/features/moderation/data/moderation_repository.dart';
+import 'package:sohbet/features/moderation/presentation/admin_support_screen.dart';
 import 'package:sohbet/features/moderation/presentation/reports_screen.dart';
 import 'package:sohbet/features/chat/presentation/room_settings_screen.dart';
 import 'package:sohbet/features/chat/presentation/rooms_screen.dart';
@@ -303,9 +304,13 @@ class _FakeUserRepository implements UserRepository {
 
 /// Firebase'e dokunmayan sahte şikayet deposu (inceleme paneli).
 class _FakeModerationRepository implements ModerationRepository {
-  _FakeModerationRepository({this.reports = const <ReportItem>[]});
+  _FakeModerationRepository({
+    this.reports = const <ReportItem>[],
+    this.tickets = const <SupportTicket>[],
+  });
 
   final List<ReportItem> reports;
+  final List<SupportTicket> tickets;
 
   @override
   Future<bool> isAdmin() async => true;
@@ -317,8 +322,13 @@ class _FakeModerationRepository implements ModerationRepository {
   Future<void> updateReportStatus(String reportId, String status) async {}
 
   @override
-  Stream<List<SupportTicket>> watchMySupportTickets() =>
-      Stream.value(const <SupportTicket>[]);
+  Stream<List<SupportTicket>> watchMySupportTickets() => Stream.value(tickets);
+
+  @override
+  Stream<List<SupportTicket>> watchAllSupportTickets() => Stream.value(tickets);
+
+  @override
+  Future<void> replyToSupportTicket(String ticketId, String reply) async {}
 
   @override
   Future<void> sendReport({
@@ -754,6 +764,47 @@ void main() {
     await expectLater(
       find.byType(MaterialApp),
       matchesGoldenFile('goldens/21_undo_snackbar.png'),
+    );
+  });
+
+  testWidgets('22 yönetici destek paneli', (tester) async {
+    final now = DateTime.now();
+    final tickets = <SupportTicket>[
+      SupportTicket(
+        id: 't1',
+        topic: 'Bildirim gelmiyor',
+        message: 'Yeni mesaj gelince telefonuma bildirim düşmüyor, '
+            'uygulamayı açınca görüyorum.',
+        status: 'open',
+        name: 'Deniz Kaya',
+        email: 'deniz@ornek.com',
+        createdAt: now.subtract(const Duration(hours: 3)),
+      ),
+      SupportTicket(
+        id: 't2',
+        topic: 'Kanal daveti',
+        message: 'Davet bağlantısı açılmıyor, kodu elle girmem gerekiyor.',
+        status: 'answered',
+        name: 'Emre Demir',
+        email: 'emre@ornek.com',
+        adminReply: 'Bağlantı sayfası güncellendi, tekrar dener misin?',
+        repliedAt: now.subtract(const Duration(days: 1)),
+        createdAt: now.subtract(const Duration(days: 2)),
+      ),
+    ];
+
+    await tester.pumpWidget(
+      _wrap(
+        AdminSupportScreen(
+          repository: _FakeModerationRepository(tickets: tickets),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    await expectLater(
+      find.byType(MaterialApp),
+      matchesGoldenFile('goldens/22_admin_support.png'),
     );
   });
 

@@ -659,10 +659,17 @@ class ChatRepository {
     );
   }
 
-  /// Odanın geçerli davet bağlantıları.
+  /// Kullanıcının bu oda için oluşturduğu davet bağlantıları.
+  ///
+  /// Firestore kuralları listelemeye yalnızca `createdBy == kendi uid`
+  /// kayıtlarında izin verir (davet kodlarının başkasına sızmasını engeller),
+  /// bu yüzden sorgu iki eşitlik filtresi içerir — bileşik indeks gerekmez.
   Stream<List<RoomInvite>> watchInvites(String roomId) {
+    final uid = _myUid;
+    if (uid == null) return Stream<List<RoomInvite>>.value(const <RoomInvite>[]);
     return _invites
         .where('roomId', isEqualTo: roomId)
+        .where('createdBy', isEqualTo: uid)
         .snapshots()
         .map((snapshot) {
       final list = snapshot.docs.map(RoomInvite.fromDoc).toList();

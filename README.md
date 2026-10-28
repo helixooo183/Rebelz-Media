@@ -365,6 +365,7 @@ flutter test test_preview/preview_test.dart --update-goldens   # docs/screens.pn
 - [x] **Avatar koruması** (girişte Google fotoğrafı/adı özel seçimi ezmez)
 - [x] **Mesaj silme** (benden sil / herkesten sil) + fotoğrafta tam ekran görüntüleme + 5 saniyelik **geri al** bildirimi
 - [x] **Kanala katıl / ayrıl / kanalı sil** (sahip) · **https davet bağlantısı** (`/katil/?k=KOD`)
+- [x] **Destek taleplerini yönetici yanıtlar** (Destek talepleri paneli)
 - [ ] Mesaj sayfalama (şu an son 200 mesaj), FCM bildirimleri
 
 ---

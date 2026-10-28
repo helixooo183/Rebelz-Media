@@ -377,7 +377,7 @@ service cloud.firestore {
               || (room().get('permissions', {})
                       .get('modsDeleteMessages', false) == true
                   && (isRoomOwner() || isRoomMod()))
-              || (isRoomOwner() && !isChannel()));
+              || isRoomOwner());
       }
     }
 
@@ -394,7 +394,11 @@ service cloud.firestore {
     // kodu okuyabilir (katılmak için gereken tek bilgi kodun kendisidir).
     match /room_invites/{code} {
       allow get: if signedIn();
-      allow list: if false;
+      // Liste yalnızca KENDİ oluşturduğun davetler: sorgu
+      // `where('createdBy', '==', uid)` içerdiği için kanıtlanabilir.
+      // Böylece kimse tüm davet kodlarını toplayamaz.
+      allow list: if signedIn()
+        && resource.data.createdBy == request.auth.uid;
       allow create: if signedIn()
         && request.resource.data.createdBy == request.auth.uid
         && isNonEmptyString(request.resource.data.roomId, 128)
@@ -451,8 +455,20 @@ service cloud.firestore {
              'uid', 'name', 'email', 'topic', 'message', 'status',
              'platform', 'createdAt',
            ]);
-      allow read: if signedIn() && resource.data.uid == request.auth.uid;
-      allow update, delete: if false;
+      // Sahibi kendi talebini, yönetici tümünü okur.
+      allow get: if signedIn()
+        && (resource.data.uid == request.auth.uid || isAdmin());
+      allow list: if isAdmin();
+
+      // Yönetici yanıtı: yalnızca yanıt alanları + durum yazılabilir.
+      allow update: if isAdmin()
+        && request.resource.data.diff(resource.data).affectedKeys()
+             .hasOnly(['adminReply', 'repliedAt', 'repliedBy', 'status'])
+        && isNonEmptyString(request.resource.data.adminReply, 2000)
+        && request.resource.data.repliedBy == request.auth.uid
+        && request.resource.data.status in ['answered', 'closed'];
+
+      allow delete: if false;
     }
 
     // Varsayılan: her şeyi kapat.

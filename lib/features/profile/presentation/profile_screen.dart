@@ -6,6 +6,7 @@ import '../../../core/widgets/app_card.dart';
 import '../../../core/widgets/primary_button.dart';
 import '../../../core/widgets/user_avatar.dart';
 import '../../../core/widgets/verify_email_banner.dart';
+import '../../moderation/presentation/admin_support_screen.dart';
 import '../../moderation/presentation/reports_screen.dart';
 import '../../moderation/presentation/support_screen.dart';
 import '../data/user_repository.dart';
@@ -89,6 +90,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
       MaterialPageRoute<bool>(
         builder: (_) => EditProfileScreen(profile: profile),
       ),
+    );
+  }
+
+  Future<void> _openAdminSupport() async {
+    await Navigator.of(context).push(
+      MaterialPageRoute<void>(builder: (_) => const AdminSupportScreen()),
     );
   }
 
@@ -204,6 +211,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       icon: Icons.shield_outlined,
                       label: 'Şikayetler (yönetici)',
                       onTap: _openReports,
+                    ),
+                  if (_isAdmin)
+                    _ActionTile(
+                      icon: Icons.support_agent_rounded,
+                      label: 'Destek talepleri (yönetici)',
+                      onTap: _openAdminSupport,
                     ),
                   _ActionTile(
                     icon: Icons.support_agent_rounded,

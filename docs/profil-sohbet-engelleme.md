@@ -147,6 +147,8 @@ açılır ve **Davet** ekranı gelir.
 - Ekranda kod gösterilir, "Katıl"a basınca odaya üye olunur ve sohbet açılır.
 - Elle girilen kodda otomatik katılma yapılmaz (`autoJoin` yalnızca
   bağlantıdan gelen akışta).
+- Ayarlardaki davet listesi **yalnızca kendi oluşturduğun** bağlantıları
+  gösterir (kural: `createdBy == uid`); böylece davet kodları sızdırılamaz.
 
 ### Kanal/grup fotoğrafı
 Ayarlar ekranındaki avatara dokun → galeriden fotoğraf seç.
@@ -170,7 +172,21 @@ Kanal sahibi ayarlarda **Özel kanal** anahtarını açar:
 Kanallar sekmesinde üstte **arama çubuğu** vardır; kanal adı ve açıklamasında
 aranır. Sonuç yoksa doğrudan "Kod ile katıl" önerilir.
 
-## 7. Şikayet inceleme paneli (yönetici)
+## 7. Destek talepleri paneli (yönetici)
+
+Profil → **Destek talepleri (yönetici)** (yalnızca `admins/{uid}` kaydı olan).
+
+- Filtre: **Bekleyen / Yanıtlanan / Tümü**; kartlarda konu, mesaj, kullanıcı
+  adı + e-posta, tarih ve varsa önceki yanıt görünür.
+- **Yanıtla** → yazılan metin `support_requests/{id}` üzerine `adminReply`,
+  `repliedAt`, `repliedBy` ve `status: answered` olarak yazılır.
+- Kullanıcı tarafında (Destek ekranı) talep **Yanıtlandı** etiketiyle ve
+  "Destek ekibi yanıtladı" kutusuyla görünür.
+- Kurallar: listeleme/okuma yöneticiye açık; güncelleme yalnızca
+  `adminReply`, `repliedAt`, `repliedBy`, `status` alanlarında ve yalnızca
+  yönetici tarafından yapılabilir (`repliedBy == kendi uid`).
+
+## 8. Şikayet inceleme paneli (yönetici)
 
 Profil → **Şikayetler (yönetici)** (yalnızca yöneticide görünür).
 
@@ -189,13 +205,13 @@ Profil → **Şikayetler (yönetici)** (yalnızca yöneticide görünür).
   `status`/`reviewedAt`/`reviewedBy` alanlarında ve yalnızca yönetici
   tarafından yapılabilir.
 
-## 8. Kategori değiştirme (kaydırma)
+## 9. Kategori değiştirme (kaydırma)
 
 Sohbetler ekranında listeyi **sola/sağa kaydırarak** kategori değişir
 (Tümü ↔ Kişiler ↔ Gruplar). Alttaki noktalar hangi kategoride olduğunu
 gösterir, dokunarak da geçilebilir.
 
-## 9. Mesaj silme ve fotoğraf görüntüleme
+## 10. Mesaj silme ve fotoğraf görüntüleme
 
 Bir mesaja (metin, fotoğraf veya sesli mesaj) **uzun bas** → işlem menüsü:
 
@@ -225,7 +241,7 @@ Bir mesaja (metin, fotoğraf veya sesli mesaj) **uzun bas** → işlem menüsü:
 fotoğraflarda hem görsel üzerinde hem altında ikinci bir saat+✓✓ vardı;
 kaldırıldı.)
 
-## 10. Kanala katılma, ayrılma ve kanalı silme
+## 11. Kanala katılma, ayrılma ve kanalı silme
 
 | Nerede | Ne yapar |
 |---|---|
@@ -241,7 +257,7 @@ kaldırıldı.)
 - Kanala erişim hatası (`permission-denied`) bu kural eksikliğinden
   kaynaklanıyordu; güncel `firestore.rules` ile çözüldü.
 
-## 11. Sohbet silme
+## 12. Sohbet silme
 
 Sohbet balonuna **uzun bas** ya da satırdaki **⋮** menüsü:
 
@@ -250,7 +266,7 @@ Sohbet balonuna **uzun bas** ya da satırdaki **⋮** menüsü:
 | **Sadece benden kaldır** | `rooms.hiddenFor`'a uid eklenir. Karşı taraf sohbeti görmeye devam eder. Karşı taraf yeni mesaj yazarsa sohbet ikinizde de geri gelir. |
 | **Sohbeti tamamen sil** | Tüm mesajlar (300'erli partiler) ve oda dokümanı silinir. Doğrudan sohbette iki taraf da silebilir; eski grup sohbetlerinde yalnızca oluşturan. |
 
-## 12. Engelleme
+## 13. Engelleme
 
 - Sohbet ekranı sağ üst menü → **Kişiyi engelle** (onay istenir).
 - Engellenen kişi:
@@ -263,7 +279,7 @@ Sohbet balonuna **uzun bas** ya da satırdaki **⋮** menüsü:
 - Engeli kaldırdıktan sonra sohbeti yeniden açmak için *Yeni sohbet* →
   kullanıcı adını ara.
 
-## 13. Kurulum adımları (tek seferlik)
+## 14. Kurulum adımları (tek seferlik)
 
 1. `firestore.rules` dosyasını yayınlayın:
    `firebase deploy --only firestore:rules` (ya da konsoldan yapıştırıp
@@ -278,7 +294,7 @@ Sohbet balonuna **uzun bas** ya da satırdaki **⋮** menüsü:
    (tipik 10-25 KB, üst sınır 400 000 karakter). Eski `https://` bağlantıları
    da desteklenmeye devam eder.
 
-## 14. Bilinen sınırlar
+## 15. Bilinen sınırlar
 
 - Engelleme, istemci + kural düzeyinde uygulanır; engellenen kişi teknik
   olarak yeni bir hesapla yazabilir. Kalıcı engelleme için Cloud Functions
