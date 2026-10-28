@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../../core/services/firestore_errors.dart';
 import '../../../core/services/services.dart';
 import '../../../core/theme/app_colors.dart';
 import '../data/moderation_repository.dart';
@@ -54,7 +55,7 @@ class _SupportScreenState extends State<SupportScreen> {
     } on ModerationException catch (e) {
       setState(() => _error = e.message);
     } catch (e) {
-      setState(() => _error = 'Talep gönderilemedi: $e');
+      setState(() => _error = 'Talep gönderilemedi: ${friendlyFirestoreError(e)}');
     } finally {
       if (mounted) setState(() => _isSending = false);
     }
@@ -144,7 +145,7 @@ class _SupportScreenState extends State<SupportScreen> {
             builder: (context, snapshot) {
               if (snapshot.hasError) {
                 return Text(
-                  'Talepler yüklenemedi: ${snapshot.error}',
+                  'Talepler yüklenemedi: ${friendlyFirestoreError(snapshot.error!)}',
                   style: TextStyle(fontSize: 12.5, color: context.muted),
                 );
               }

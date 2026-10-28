@@ -218,7 +218,7 @@ class _ChatScreenState extends State<ChatScreen> {
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('İşlem tamamlanamadı: $e')),
+        SnackBar(content: Text('İşlem tamamlanamadı: ${friendlyFirestoreError(e)}')),
       );
     } finally {
       if (mounted) setState(() => _isBusy = false);
@@ -298,7 +298,7 @@ class _ChatScreenState extends State<ChatScreen> {
                 await onUndo();
                 if (mounted) _toast('Mesaj geri alındı.');
               } catch (e) {
-                if (mounted) _toast('Geri alınamadı: $e');
+                if (mounted) _toast('Geri alınamadı: ${friendlyFirestoreError(e)}');
               }
             },
           ),
@@ -516,7 +516,7 @@ class _ChatScreenState extends State<ChatScreen> {
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Sohbet silinemedi: $e')),
+        SnackBar(content: Text('Sohbet silinemedi: ${friendlyFirestoreError(e)}')),
       );
     } finally {
       if (mounted) setState(() => _isBusy = false);
@@ -555,7 +555,7 @@ class _ChatScreenState extends State<ChatScreen> {
     } catch (e) {
       if (!mounted) return;
       _messageController.text = text;
-      _snack(e is ChatException ? e.message : 'Mesaj gönderilemedi: $e');
+      _snack(e is ChatException ? e.message : 'Mesaj gönderilemedi: ${friendlyFirestoreError(e)}');
     } finally {
       if (mounted) setState(() => _isSending = false);
     }
@@ -585,7 +585,7 @@ class _ChatScreenState extends State<ChatScreen> {
       await _scrollToLatest();
     } catch (e) {
       if (!mounted) return;
-      _snack('Fotoğraf gönderilemedi: $e');
+      _snack('Fotoğraf gönderilemedi: ${friendlyFirestoreError(e)}');
     } finally {
       if (mounted) setState(() => _isSending = false);
     }
@@ -641,7 +641,7 @@ class _ChatScreenState extends State<ChatScreen> {
       await _scrollToLatest();
     } catch (e) {
       if (!mounted) return;
-      _snack(e is ChatException ? e.message : 'Ses gönderilemedi: $e');
+      _snack(e is ChatException ? e.message : 'Ses gönderilemedi: ${friendlyFirestoreError(e)}');
     } finally {
       if (mounted) setState(() => _isSending = false);
     }
@@ -669,7 +669,7 @@ class _ChatScreenState extends State<ChatScreen> {
         if (mounted) setState(() => _playingMessageId = null);
       });
     } catch (e) {
-      if (mounted) _snack('Ses oynatılamadı: $e');
+      if (mounted) _snack('Ses oynatılamadı.');
     }
   }
 
@@ -872,7 +872,7 @@ class _ChatScreenState extends State<ChatScreen> {
                       return EmptyState(
                         icon: Icons.cloud_off_rounded,
                         title: 'Mesajlar yüklenemedi',
-                        message: '${snapshot.error}',
+                        message: friendlyFirestoreError(snapshot.error!),
                       );
                     }
 

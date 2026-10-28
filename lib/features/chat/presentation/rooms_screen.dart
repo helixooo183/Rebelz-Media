@@ -3,6 +3,7 @@ import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 
 import '../../../core/router/app_router.dart';
+import '../../../core/services/firestore_errors.dart';
 import '../../../core/services/services.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/widgets/app_card.dart';
@@ -158,7 +159,7 @@ class _RoomsScreenState extends State<RoomsScreen> {
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('İşlem tamamlanamadı: $e')),
+        SnackBar(content: Text('İşlem tamamlanamadı: ${friendlyFirestoreError(e)}')),
       );
     }
   }
@@ -277,7 +278,7 @@ class _RoomsScreenState extends State<RoomsScreen> {
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Onay kaydedilemedi: $e')),
+        SnackBar(content: Text('Onay kaydedilemedi: ${friendlyFirestoreError(e)}')),
       );
     } finally {
       if (mounted) setState(() => _isAcceptingTerms = false);
@@ -354,7 +355,7 @@ class _RoomsScreenState extends State<RoomsScreen> {
                         return EmptyState(
                           icon: Icons.cloud_off_rounded,
                           title: 'Sohbetler yüklenemedi',
-                          message: '${snapshot.error}',
+                          message: friendlyFirestoreError(snapshot.error!),
                         );
                       }
 
