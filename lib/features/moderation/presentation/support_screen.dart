@@ -223,7 +223,7 @@ class _TicketCard extends StatelessWidget {
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: Text(
-                  ticket.status == 'open' ? 'İncelemede' : ticket.status,
+                  ticket.durumEtiketi,
                   style: TextStyle(
                     fontSize: 11,
                     fontWeight: FontWeight.w700,
@@ -240,6 +240,47 @@ class _TicketCard extends StatelessWidget {
             overflow: TextOverflow.ellipsis,
             style: TextStyle(fontSize: 12.5, height: 1.4, color: context.muted),
           ),
+          if (ticket.adminReply.isNotEmpty) ...[
+            const SizedBox(height: 10),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
+              decoration: BoxDecoration(
+                color: context.cardHigh,
+                borderRadius: BorderRadius.circular(10),
+                border: Border(
+                  left: BorderSide(color: context.colors.primary, width: 3),
+                ),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Icon(
+                        Icons.support_agent_rounded,
+                        size: 13,
+                        color: context.colors.primary,
+                      ),
+                      const SizedBox(width: 5),
+                      Text(
+                        'Destek ekibi yanıtladı',
+                        style: TextStyle(
+                          fontSize: 10.5,
+                          fontWeight: FontWeight.w700,
+                          color: context.colors.primary,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    ticket.adminReply,
+                    style: const TextStyle(fontSize: 12.5, height: 1.4),
+                  ),
+                ],
+              ),
+            ),
+          ],
           if (when.isNotEmpty) ...[
             const SizedBox(height: 6),
             Text(

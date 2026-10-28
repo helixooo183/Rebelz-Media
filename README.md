@@ -365,8 +365,26 @@ flutter test test_preview/preview_test.dart --update-goldens   # docs/screens.pn
 - [x] **Avatar koruması** (girişte Google fotoğrafı/adı özel seçimi ezmez)
 - [x] **Mesaj silme** (benden sil / herkesten sil) + fotoğrafta tam ekran görüntüleme + 5 saniyelik **geri al** bildirimi
 - [x] **Kanala katıl / ayrıl / kanalı sil** (sahip) · **https davet bağlantısı** (`/katil/?k=KOD`)
+- [x] **Destek taleplerini yönetici yanıtlar** (Destek talepleri paneli)
 - [ ] Mesaj sayfalama (şu an son 200 mesaj), FCM bildirimleri
 
 ---
+
+## Firebase Hosting (davet sayfası)
+
+- Yayınlanan klasör: **`docs/`** (`firebase.json` → `hosting.public`)
+- Adres: `https://rebelz-media.web.app`
+- Davet linki: `https://rebelz-media.web.app/katil/?k=KOD`
+
+Yerelden yayın:
+```bash
+firebase login
+firebase use rebelz-media
+firebase deploy --only hosting
+```
+
+Otomatik yayın (`.github/workflows/hosting.yml`): `docs/**` veya `firebase.json`
+`main`'e geldiğinde çalışır. Depoya **`FIREBASE_TOKEN`** secret'ı eklenmeli
+(`firebase login:ci` → Settings → Secrets and variables → Actions).
 
 Ayrıntılı kurulum/derleme adımları: [docs/KURULUM.md](docs/KURULUM.md)

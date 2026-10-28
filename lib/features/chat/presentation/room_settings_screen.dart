@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../../../core/services/firestore_errors.dart';
 import '../../../core/services/media_service.dart';
 import '../../../core/services/services.dart';
 import '../../../core/theme/app_colors.dart';
@@ -70,7 +71,7 @@ class _RoomSettingsScreenState extends State<RoomSettingsScreen> {
       await action();
       _toast(success);
     } catch (e) {
-      _toast('İşlem tamamlanamadı: $e');
+      _toast(friendlyFirestoreError(e));
     } finally {
       if (mounted) setState(() => _isBusy = false);
     }
@@ -314,7 +315,7 @@ class _RoomSettingsScreenState extends State<RoomSettingsScreen> {
       await Clipboard.setData(ClipboardData(text: invite.link));
       _toast('Davet bağlantısı kopyalandı: ${invite.link}');
     } catch (e) {
-      _toast('Davet oluşturulamadı: $e');
+      _toast('Davet oluşturulamadı: ${friendlyFirestoreError(e)}');
     } finally {
       if (mounted) setState(() => _isBusy = false);
     }

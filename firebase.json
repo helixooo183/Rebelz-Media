@@ -10,14 +10,23 @@
       "**/node_modules/**"
     ],
     "rewrites": [
-      { "source": "/katil", "destination": "/katil/index.html" },
-      { "source": "/katil/**", "destination": "/katil/index.html" }
+      {
+        "source": "/katil",
+        "destination": "/katil/index.html"
+      },
+      {
+        "source": "/katil/**",
+        "destination": "/katil/index.html"
+      }
     ],
     "headers": [
       {
         "source": "/katil/**",
         "headers": [
-          { "key": "Cache-Control", "value": "no-cache, max-age=0" }
+          {
+            "key": "Cache-Control",
+            "value": "no-cache, max-age=0"
+          }
         ]
       }
     ]

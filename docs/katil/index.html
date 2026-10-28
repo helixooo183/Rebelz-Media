@@ -76,6 +76,13 @@
       cursor: pointer;
     }
     .btn:active { transform: translateY(1px); }
+    .btn.secondary {
+      margin-top: 10px;
+      background: transparent;
+      border: 1px solid var(--line);
+      color: var(--text);
+      font-weight: 600;
+    }
     .hint {
       color: var(--muted);
       font-size: 12.5px;
@@ -100,10 +107,14 @@
     <div class="code hidden" id="code"></div>
 
     <a class="btn hidden" id="open" href="#">Rebelz Media'yı aç</a>
+    <button class="btn secondary hidden" id="copy" type="button">
+      Kodu kopyala
+    </button>
 
     <p class="hint hidden" id="nohint">
-      Butona bastığında uygulama açılmazsa Rebelz Media kurulu değildir.
-      Uygulamayı açıp <b>Kanallar → Kod ile katıl</b> yolundan kodu girebilirsin.
+      Uygulama açılmadıysa Rebelz Media kurulu değil olabilir. Kodu
+      kopyalayıp uygulamada <b>Kanallar → Kod ile katıl</b> alanına
+      yapıştırabilirsin.
     </p>
     <p class="hint hidden" id="nocode">
       Bu bağlantıda davet kodu bulunamadı. Bağlantıyı tekrar kontrol et.
@@ -140,16 +151,58 @@
       }
 
       var deepLink = 'rebelzmedia://katil/' + code;
+      var isAndroid = /Android/i.test(navigator.userAgent || '');
+      // Android'de `intent://` biçimi Chrome ve uygulama içi tarayıcılarda
+      // (WhatsApp/Instagram) özel şemadan daha güvenilir çalışır.
+      var intentLink =
+        'intent://katil/' + code +
+        '#Intent;scheme=rebelzmedia;package=com.rebelz.media;end';
+
+      function openApp() {
+        window.location.href = isAndroid ? intentLink : deepLink;
+      }
+
       codeEl.textContent = code;
       codeEl.classList.remove('hidden');
       openEl.href = deepLink;
       openEl.classList.remove('hidden');
       hintEl.classList.remove('hidden');
 
+      var copyEl = document.getElementById('copy');
+      copyEl.classList.remove('hidden');
+      copyEl.addEventListener('click', function () {
+        copyText(code);
+        copyEl.textContent = 'Kopyalandı ✓';
+        window.setTimeout(function () {
+          copyEl.textContent = 'Kodu kopyala';
+        }, 1800);
+      });
+
+      function copyText(text) {
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          navigator.clipboard.writeText(text);
+          return;
+        }
+        var area = document.createElement('textarea');
+        area.value = text;
+        document.body.appendChild(area);
+        area.select();
+        try {
+          document.execCommand('copy');
+        } catch (e) {}
+        document.body.removeChild(area);
+      }
+
+      openEl.addEventListener('click', function (event) {
+        event.preventDefault();
+        openApp();
+        window.setTimeout(function () {
+          hintEl.classList.remove('hidden');
+        }, 1600);
+      });
+
       // Sayfa açılır açılmaz uygulamayı dene (kullanıcı dokunmasa da).
-      window.setTimeout(function () {
-        window.location.href = deepLink;
-      }, 250);
+      window.setTimeout(openApp, 300);
     })();
   </script>
 </body>

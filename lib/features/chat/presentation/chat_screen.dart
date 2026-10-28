@@ -4,6 +4,7 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
+import '../../../core/services/firestore_errors.dart';
 import '../../../core/services/media_service.dart';
 import '../../../core/services/services.dart';
 import '../../../core/theme/app_colors.dart';
@@ -320,7 +321,7 @@ class _ChatScreenState extends State<ChatScreen> {
         },
       );
     } catch (e) {
-      _toast('Mesaj gizlenemedi: $e');
+      _toast(friendlyFirestoreError(e));
     }
   }
 
@@ -363,7 +364,7 @@ class _ChatScreenState extends State<ChatScreen> {
         onUndo: () => _repository.restoreMessage(widget.roomId, message),
       );
     } catch (e) {
-      _toast('Mesaj silinemedi: $e');
+      _toast(friendlyFirestoreError(e));
     }
   }
 
@@ -393,7 +394,7 @@ class _ChatScreenState extends State<ChatScreen> {
       await _repository.joinChannel(room.id);
       _toast('${room.name} kanalına katıldın.');
     } catch (e) {
-      _toast('Katılınamadı: $e');
+      _toast('Katılınamadı: ${friendlyFirestoreError(e)}');
     } finally {
       if (mounted) setState(() => _isBusy = false);
     }
@@ -434,7 +435,7 @@ class _ChatScreenState extends State<ChatScreen> {
       _toast('${room.name} ${isChannel ? 'kanalından' : 'grubundan'} ayrıldın.');
       if (Navigator.of(context).canPop()) Navigator.of(context).pop();
     } catch (e) {
-      _toast('Ayrılınamadı: $e');
+      _toast('Ayrılamadın: ${friendlyFirestoreError(e)}');
     } finally {
       if (mounted) setState(() => _isBusy = false);
     }
@@ -475,7 +476,7 @@ class _ChatScreenState extends State<ChatScreen> {
       _toast('$kind silindi.');
       if (Navigator.of(context).canPop()) Navigator.of(context).pop();
     } catch (e) {
-      _toast('$kind silinemedi: $e');
+      _toast('$kind silinemedi: ${friendlyFirestoreError(e)}');
     } finally {
       if (mounted) setState(() => _isBusy = false);
     }

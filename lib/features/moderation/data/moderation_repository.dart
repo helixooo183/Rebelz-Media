@@ -102,6 +102,11 @@ class SupportTicket {
     required this.message,
     required this.status,
     this.createdAt,
+    this.uid = '',
+    this.name = '',
+    this.email = '',
+    this.adminReply = '',
+    this.repliedAt,
   });
 
   final String id;
@@ -109,6 +114,24 @@ class SupportTicket {
   final String message;
   final String status;
   final DateTime? createdAt;
+
+  /// Talebi açan kullanıcı (yönetici panelinde gösterilir).
+  final String uid;
+  final String name;
+  final String email;
+
+  /// Yöneticinin yanıtı (boşsa henüz yanıtlanmadı).
+  final String adminReply;
+  final DateTime? repliedAt;
+
+  /// Yönetici yanıtladı mı?
+  bool get yanitlandi => adminReply.isNotEmpty || status == 'answered';
+
+  String get durumEtiketi => switch (status) {
+        'answered' => 'Yanıtlandı',
+        'closed' => 'Kapatıldı',
+        _ => 'İncelemede',
+      };
 
   factory SupportTicket.fromDoc(
     DocumentSnapshot<Map<String, dynamic>> doc,
@@ -120,6 +143,11 @@ class SupportTicket {
       message: (data['message'] as String?)?.trim() ?? '',
       status: (data['status'] as String?)?.trim() ?? 'open',
       createdAt: (data['createdAt'] as Timestamp?)?.toDate(),
+      uid: (data['uid'] as String?)?.trim() ?? '',
+      name: (data['name'] as String?)?.trim() ?? '',
+      email: (data['email'] as String?)?.trim() ?? '',
+      adminReply: (data['adminReply'] as String?)?.trim() ?? '',
+      repliedAt: (data['repliedAt'] as Timestamp?)?.toDate(),
     );
   }
 }
@@ -247,6 +275,46 @@ class ModerationRepository {
     } catch (_) {
       return false;
     }
+  }
+
+  /// Tüm destek talepleri (yalnızca yönetici; kurallar da bunu ister).
+  ///
+  /// Sorgu tek koleksiyon taramasıdır (filtre yok) → bileşik indeks gerekmez.
+  Stream<List<SupportTicket>> watchAllSupportTickets() {
+    try {
+      return _support.limit(200).snapshots().map((snapshot) {
+        final tickets = snapshot.docs.map(SupportTicket.fromDoc).toList();
+        tickets.sort((a, b) {
+          final aTime = a.createdAt ?? DateTime(1970);
+          final bTime = b.createdAt ?? DateTime(1970);
+          return bTime.compareTo(aTime);
+        });
+        return List<SupportTicket>.unmodifiable(tickets);
+      });
+    } catch (_) {
+      return const Stream<List<SupportTicket>>.empty();
+    }
+  }
+
+  /// Yönetici destek talebini yanıtlar.
+  ///
+  /// Yalnızca `adminReply`, `repliedAt`, `repliedBy`, `status` alanları
+  /// yazılır; kural da başka alanı kabul etmez.
+  Future<void> replyToSupportTicket(String ticketId, String reply) async {
+    final uid = _requireUid();
+    final body = reply.trim();
+    if (body.length < 2) {
+      throw const ModerationException('Yanıt çok kısa.');
+    }
+    if (body.length > 2000) {
+      throw const ModerationException('Yanıt en fazla 2000 karakter olabilir.');
+    }
+    await _support.doc(ticketId).set({
+      'adminReply': body,
+      'repliedAt': FieldValue.serverTimestamp(),
+      'repliedBy': uid,
+      'status': 'answered',
+    }, SetOptions(merge: true));
   }
 
   /// Tüm şikayetler (yalnızca yöneticiye açıktır — kurallar da bunu ister).
