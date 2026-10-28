@@ -123,3 +123,17 @@ String? inviteCodeFromUri(Uri uri) {
   }
   return null;
 }
+
+/// Derin bağlantı adresini uygulama rotasına çevirir.
+///
+/// GoRouter, `rebelzmedia://katil/KOD` gibi özel şema adreslerini rota olarak
+/// eşleştiremez ("no routes for location" hatası). Bu yardımcı adresi
+/// `/katil/KOD?auto=1` biçimine çevirir; tanınmazsa `null`.
+String? inviteRouteFromLocation(String location) {
+  final uri = Uri.tryParse(location);
+  if (uri == null) return null;
+
+  final code = inviteCodeFromUri(uri);
+  if (code == null || code.length < 6) return null;
+  return '/katil/$code?auto=1';
+}

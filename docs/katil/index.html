@@ -91,6 +91,40 @@
     }
     .hint a { color: var(--brand); text-decoration: none; }
     .hidden { display: none; }
+    .store {
+      margin-top: 18px;
+      padding-top: 16px;
+      border-top: 1px solid var(--line);
+    }
+    .store .label {
+      color: var(--muted);
+      font-size: 12px;
+      margin-bottom: 10px;
+    }
+    .play-btn {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      width: 100%;
+      padding: 12px 16px;
+      border-radius: 14px;
+      text-decoration: none;
+      background: #111113;
+      border: 1px solid var(--line);
+      color: var(--text);
+      font-weight: 700;
+      font-size: 14.5px;
+    }
+    .play-btn .play-logo { width: 20px; height: 20px; }
+    .play-btn small {
+      display: block;
+      font-weight: 500;
+      font-size: 10.5px;
+      color: var(--muted);
+      letter-spacing: 0.02em;
+    }
+    .play-btn.is-disabled { opacity: 0.55; cursor: default; }
   </style>
 </head>
 <body>
@@ -116,6 +150,24 @@
       kopyalayıp uygulamada <b>Kanallar → Kod ile katıl</b> alanına
       yapıştırabilirsin.
     </p>
+    <div class="store hidden" id="store">
+      <div class="label" id="storeLabel">
+        Uygulama açılmadı mı? Kurmak için indir:
+      </div>
+      <a class="play-btn is-disabled" id="play" href="#" rel="noopener">
+        <svg class="play-logo" viewBox="0 0 512 512" aria-hidden="true">
+          <path fill="#00D2FF" d="M47 32l217 224L47 480c-9-6-14-16-14-28V60c0-12 5-22 14-28z"/>
+          <path fill="#00F076" d="M47 32c8-6 19-7 29-1l246 141-97 100L47 32z"/>
+          <path fill="#FF3A44" d="M47 480c8 6 19 7 29 1l246-141-97-100L47 480z"/>
+          <path fill="#FFC900" d="M322 172l69 40c20 11 20 37 0 48l-69 40-99-64 99-64z"/>
+        </svg>
+        <span>
+          Google Play'den indir
+          <small id="playNote">Yakında Play Store'da</small>
+        </span>
+      </a>
+    </div>
+
     <p class="hint hidden" id="nocode">
       Bu bağlantıda davet kodu bulunamadı. Bağlantıyı tekrar kontrol et.
     </p>
@@ -154,9 +206,18 @@
       var isAndroid = /Android/i.test(navigator.userAgent || '');
       // Android'de `intent://` biçimi Chrome ve uygulama içi tarayıcılarda
       // (WhatsApp/Instagram) özel şemadan daha güvenilir çalışır.
+      //
+      // `S.browser_fallback_url`: uygulama yüklü değilse tarayıcı bu adrese
+      // düşer, yani kullanıcı Play Store seçeneğinin bulunduğu bu sayfada
+      // kalır (uygulama varsa doğrudan açılır).
+      // `inapp=1`: uygulama yoksa bu sayfaya geri dönülür; sonsuz döngüyü
+      // engellemek için o durumda otomatik açma denemesi yapılmaz.
+      var fallbackUrl =
+        'https://rebelz-media.web.app/katil/?k=' + code + '&inapp=1';
       var intentLink =
         'intent://katil/' + code +
-        '#Intent;scheme=rebelzmedia;package=com.rebelz.media;end';
+        '#Intent;scheme=rebelzmedia;package=com.rebelz.media;' +
+        'S.browser_fallback_url=' + encodeURIComponent(fallbackUrl) + ';end';
 
       function openApp() {
         window.location.href = isAndroid ? intentLink : deepLink;
@@ -201,8 +262,49 @@
         }, 1600);
       });
 
+      // Google Play: uygulama yayınlanınca bu adresi doldur.
+      //   Örn. 'https://play.google.com/store/apps/details?id=com.rebelz.media'
+      var PLAY_STORE_URL = '';
+      var storeEl = document.getElementById('store');
+      var playEl = document.getElementById('play');
+      var playNote = document.getElementById('playNote');
+      var storeLabel = document.getElementById('storeLabel');
+
+      function showStore(message) {
+        storeLabel.textContent = message;
+        storeEl.classList.remove('hidden');
+      }
+
+      if (PLAY_STORE_URL) {
+        playEl.href = PLAY_STORE_URL;
+        playEl.classList.remove('is-disabled');
+        playNote.textContent = 'Ücretsiz indir';
+      } else {
+        // Henüz yayınlanmadı: buton görünür ama tıklanamaz.
+        playEl.addEventListener('click', function (event) {
+          event.preventDefault();
+        });
+      }
+
+      // Uygulama açılmadıysa (sayfa hâlâ görünürse) indirme seçeneğini göster.
+      function offerStore() {
+        if (document.visibilityState !== 'visible') return;
+        showStore(
+          PLAY_STORE_URL
+            ? 'Uygulama açılmadı mı? Google Play\'den indir:'
+            : 'Uygulama açılmadı mı? Rebelz Media çok yakında Google Play\'de.'
+        );
+      }
+
       // Sayfa açılır açılmaz uygulamayı dene (kullanıcı dokunmasa da).
-      window.setTimeout(openApp, 300);
+      // Fallback ile geri dönüldüyse (`inapp=1`) tekrar denemeyiz, yoksa
+      // tarayıcı ile uygulama arasında döngü oluşur.
+      var cameFromFallback =
+        /[?&]inapp=1/.test(window.location.search || '');
+      if (!cameFromFallback) {
+        window.setTimeout(openApp, 300);
+      }
+      window.setTimeout(offerStore, 2200);
     })();
   </script>
 </body>
